@@ -53,7 +53,12 @@ I/O
 ```
 
 ## PICプログラムの書き込み
-EMUZ80技術資料8ページにしたがってPICに適合するSuperMEZ80_xMHz_Q43.hexファイルを書き込んでください。  
+EMUZ80技術資料8ページにしたがってPICに適合するファイルを書き込んでください。  
+
+PIC18F47Q43 SuperMEZ80_xMHz_Q43.hex  
+
+PIC18F47Q83 SuperMEZ80_xMHz_Q8x.hex  
+PIC18F47Q84 SuperMEZ80_xMHz_Q8x.hex  
 
 
 ## Z80プログラムの格納
