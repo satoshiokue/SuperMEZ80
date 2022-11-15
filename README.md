@@ -14,6 +14,8 @@ RAMの制御信号とIOアクセスのWAIT信号をPICのCLC(Configurable Logic 
 LH0080BとPIC18F47Q43の組み合わせで動作確認しています。  
 
 動作確認済みCPU  
+SGS Z8400B1 2.5MHz
+SHARP LH0080 2.5MHz  
 SHARP LH0080B 6MHz  
 Zilog Z84C0010PEG 10MHz  
 
@@ -30,6 +32,15 @@ https://github.com/satoshiokue/MEZ80RAM/blob/main/MEZ80RAM.pdf　　
 EMUZ80で配布されているフォルダemuz80.X下のmain.cと置き換えて使用してください。
 * emuz80_z80ram.c
 
+## クロック周波数による注意
+
+クロック周波数を5.6MHz以下にする際はファームウェアの149-150行目を確認してください。
+```
+//while(!RA0);                // /IORQ <5.6MHz  
+	while(!RD7);                // /WAIT >=5.6MHz  
+```
+
+Z80がIOアドレスのリードアクセスを完了するタイミングで参照する信号を選択してください。
 
 ## アドレスマップ
 ```
