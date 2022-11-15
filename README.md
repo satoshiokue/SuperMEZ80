@@ -8,6 +8,8 @@ Z80 Single-Board Computer
 積載可能  
 
 電脳伝説さん(@vintagechips)のEMUZ80が出力するZ80 CPU制御信号をメザニンボードで組み替え、Z80と64kB RAMを動作させることができます。  
+RAMの制御信号とIOアクセスのWAIT信号をPICのCLC(Configurable Logic Cell)機能で作成しています。  
+電源が入るとPICはZ80を停止させ、ROMデータをSRAMに転送します。データ転送完了後、バスの所有権をZ80に渡してリセットを解除します。  
 
 LH0080BとPIC18F47Q43の組み合わせで動作確認しています。  
 
