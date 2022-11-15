@@ -14,7 +14,7 @@ RAMの制御信号とIOアクセスのWAIT信号をPICのCLC(Configurable Logic 
 LH0080BとPIC18F47Q43の組み合わせで動作確認しています。  
 
 動作確認済みCPU  
-SGS Z8400B1 2.5MHz
+SGS Z8400B1 2.5MHz  
 SHARP LH0080 2.5MHz  
 SHARP LH0080B 6MHz  
 Zilog Z84C0010PEG 10MHz  
