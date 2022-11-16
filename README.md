@@ -1,6 +1,9 @@
 # SuperMEZ80
 Z80 Single-Board Computer
 
+![SuperMEZ80](https://github.com/satoshiokue/SuperMEZ80/blob/main/imgs/IMG_1595.jpeg)  
+Z80B 6MHz no wait  
+
 ![SuperMEZ80](https://github.com/satoshiokue/SuperMEZ80/blob/main/imgs/IMG_1555.jpeg)  
 Z80 Single-Board Computer  
 
