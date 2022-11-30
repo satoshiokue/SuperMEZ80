@@ -228,6 +228,8 @@ void main(void) {
 
 	U3ON = 1;		// Serial port enable
 
+	RA2PPS = 0x00;		// LATA2 -> RA2
+
 	for(i = 0; i < ROM_SIZE; i++) {
 		ab.w = i;
 		LATD = ab.h;
