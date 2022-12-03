@@ -24,7 +24,10 @@ Zilog Z84C0010PEG 10MHz
 このソースコードは電脳伝説さんのmain.cを元に改変してGPLライセンスに基づいて公開するものです。
 
 ## メザニンボード
-https://github.com/satoshiokue/MEZ80RAM
+https://github.com/satoshiokue/MEZ80RAM  
+
+MEZ80RAM専用プリント基板 - オレンジピコショップ  
+https://store.shopping.yahoo.co.jp/orangepicoshop/pico-a-062.html
 
 ## 回路図
 https://github.com/satoshiokue/MEZ80RAM/blob/main/MEZ80RAM.pdf　　
