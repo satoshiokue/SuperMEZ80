@@ -118,7 +118,7 @@ char getch(void) {
 // Never called, logically
 void __interrupt(irq(default),base(8)) Default_ISR(){}
 
-// Called at WAIT falling edge(Immediately after Z80 MREQ falling)
+// Called at WAIT falling edge(Immediately after Z80 IORQ falling)
 void __interrupt(irq(CLC3),base(8)) CLC_ISR(){
 	ab.l = PORTB; // Read address low
 
