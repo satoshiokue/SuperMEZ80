@@ -80,6 +80,9 @@
 
 #include <xc.h>
 #include <stdio.h>
+#include <string.h>
+#include <ff.h>
+#include <SDCard.h>
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
 
@@ -88,6 +91,8 @@
 #define UART_CREG 0x01          // Control REG
 
 #define _XTAL_FREQ 64000000UL
+#define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
+#define SPI_CLOCK_2MHZ 0        // Maximum speed w/o any wait (1~2 MHz)
 
 // Z80 ROM equivalent, see end of this file
 extern const unsigned char rom[];
@@ -222,6 +227,46 @@ void main(void) {
     U3ON = 1;           // Serial port enable
 
     RA2PPS = 0x00;      // LATA2 -> RA2
+
+    {
+        static FATFS fs;
+        static FIL file;
+        static uint8_t buf[128];
+        unsigned int n;
+
+        SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100);
+        if (f_mount(&fs, "0://", 1) != FR_OK) {
+            printf("f_mount(): ERROR\n\r");
+        }
+        if (f_open(&file, "/HELLOFAT.TXT", FA_READ|FA_WRITE) != FR_OK) {
+            printf("f_open(): ERROR\n\r");
+        }
+        if (f_read(&file, buf, sizeof(buf), &n) != FR_OK) {
+            printf("f_read(): ERROR\n\r");
+        }
+        buf[n] = '\0';
+        for (char *p = buf; *p; p++) {
+            if (*p == 0x0d || *p == 0x0a)
+                *p = ' ';
+        }
+        printf("/HELLOFAT.TXT: %d bytes, \"%s\"\n\r", n, buf);
+        if (f_lseek(&file, 0) != FR_OK) {
+            printf("f_lseek(): ERROR\n\r");
+        }
+        if (buf[0] == 'H') {
+            sprintf(buf, "Good bye, FAT world!\n");
+        } else {
+            sprintf(buf, "Hello, FAT world!\n");
+        }
+        if (f_truncate(&file) != FR_OK) {
+            printf("f_truncate(): ERROR\n\r");
+        }
+        printf("f_write(): %s\n\r", buf);
+        if (f_write (&file, buf, strlen(buf), &n) != FR_OK || n != strlen(buf)) {
+            printf("f_write(): ERROR\n\r");
+        }
+        f_close(&file);
+    }
 
     for(i = 0; i < ROM_SIZE; i++) {
         ab.w = i;
