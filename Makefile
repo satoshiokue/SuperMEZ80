@@ -1,0 +1,23 @@
+CWD := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+XC8 := /Applications/microchip/xc8/v2.40/bin/xc8
+PP3_DIR := ../Arduino-PIC-Programmer
+FATFS_DIR := ../FatFs
+PORT := /dev/tty.usbmodem1444301
+PIC := 18F47Q43
+
+FATFS_SRCS := $(FATFS_DIR)/source/ff.c
+DISK_SRCS := disk/SDCard.c disk/SPI.c disk/diskio.c disk/utils.c
+
+INCS :=-Idisk -I$(FATFS_DIR)/source
+
+all: upload
+
+emuz80_z80ram.hex: emuz80_z80ram.c $(FATFS_SRCS) $(DISK_SRCS)
+	$(XC8) --chip=$(PIC) $(INCS) emuz80_z80ram.c $(FATFS_SRCS) $(DISK_SRCS)
+
+upload: emuz80_z80ram.hex
+	cd $(PP3_DIR); ./pp3 -c $(PORT) -s 1700 -v 2 -t $(PIC) $(CWD)/emuz80_z80ram.hex
+
+clean::
+	rm -f *.as
+	rm -f *.p1 *.d *.hex *.pre *.lst *.cmf *.hxl *.sdb *.obj *.sym *.rlf *.elf
