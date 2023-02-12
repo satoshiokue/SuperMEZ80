@@ -143,8 +143,11 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     G3POL = 1;
     G3POL = 0;
     // Post processing
-    // while(!RA0);                // /IORQ <5.6MHz
+#if 1
+    while(!RA0);                // /IORQ <5.6MHz
+#else
     while(!RD7);                // /WAIT >=5.6MHz
+#endif
     TRISC = 0xff;               // Set as input
     CLC3IF = 0;                 // Clear interrupt flag
 }
