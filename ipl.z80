@@ -1,0 +1,75 @@
+;	CP/M 2.2 boot-loader for Z80-Simulator
+;
+;	Copyright (C) 1988-2007 by Udo Munk
+;
+;Permission is hereby granted, free of charge, to any person
+;obtaining a copy of this software and associated documentation
+;files (the "Software"), to deal in the Software without
+;restriction, including without limitation the rights to use,
+;copy, modify, merge, publish, distribute, sublicense, and/or sell
+;copies of the Software, and to permit persons to whom the
+;Software is furnished to do so, subject to the following
+;conditions:
+;
+;The above copyright notice and this permission notice shall be
+;included in all copies or substantial portions of the Software.
+;
+;THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+;EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+;OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+;NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+;HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+;WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+;OTHER DEALINGS IN THE SOFTWARE.
+;
+	ORG	0		;mem base of boot
+;
+;	I/O ports
+;
+CONDAT	EQU	1		;console data port
+DRIVE   EQU	10		;fdc-port: # of drive
+TRACK   EQU	11		;fdc-port: # of track
+SECTOR  EQU	12		;fdc-port: # of sector
+FDCOP   EQU	13		;fdc-port: command
+FDCST   EQU	14		;fdc-port: status
+DMAL    EQU	15		;dma-port: dma address low
+DMAH    EQU	16		;dma-port: dma address high
+;
+BOOT:
+	JP	COLD
+        DEFS	128 - 3, 0
+;
+ERRMSG:	DEFM	'BOOT: error booting'
+	DEFB	13,10,0
+;
+;	begin the load operation
+;
+COLD:	LD	BC,1		;b=track 0, c=sector 1
+	LD	HL,BOOT		;base transfer address
+	XOR	A		;select drive A
+	OUT	(DRIVE),A
+LSECT:	LD	A,B		;set track
+	OUT	(TRACK),A
+	LD	A,C		;set sector
+	OUT	(SECTOR),A
+	LD	A,L		;set dma address low
+	OUT	(DMAL),A
+	LD	A,H		;set dma address high
+	OUT	(DMAH),A
+	XOR	A		;read sector
+	OUT	(FDCOP),A
+	IN	A,(FDCST)	;get status of fdc
+	OR	A		;read successful ?
+	JP	Z,BOOT		;yes, continue
+	LD	HL,ERRMSG	;no, print error
+PRTMSG:	LD	A,(HL)
+	OR	A
+	JP	Z,STOP
+	OUT	(CONDAT),A
+	INC	HL
+	JP	PRTMSG
+STOP:	DI
+	HALT			;and halt cpu
+;
+	END			;of boot loader
