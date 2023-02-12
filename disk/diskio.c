@@ -28,7 +28,7 @@
 #include "SDCard.h"
 #include "utils.h"
 
-// #define DEBUG
+#define DEBUG
 #if defined(DEBUG)
 #define dprintf(args) do { printf args; } while(0)
 #else
