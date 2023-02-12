@@ -175,9 +175,9 @@ void main(void) {
     LATD = 0x00;
     TRISD = 0x00;       // Set as output
 
-    // A14 (RE2) output pin
+    // SPI /CS (RE2) output pin
     ANSELE2 = 0;        // Disable analog function
-    LATE2 = 0;
+    LATE2 = 1;          // deactive
     TRISE2 = 0;         // Set as output
 
     // Address bus A7-A0 pin
@@ -210,6 +210,7 @@ void main(void) {
     ANSELA4 = 0;        // Disable analog function
     LATA4 = 1;
     TRISA4 = 0;         // Set as output
+    RA4PPS = 0x00;      // unbind with CLC1
 
     // UART3 initialize
     U3BRG = 416;        // 9600bps @ 64MHz
@@ -284,11 +285,6 @@ void main(void) {
     ANSELD = 0x00;      // Disable analog function
     WPUD = 0xff;        // Week pull up
     TRISD = 0xff;       // Set as input
-
-    // A14 (RE2) input pin
-    ANSELE2 = 0;        // Disable analog function
-    WPUE2 = 1;          //
-    TRISE2 = 1;         // Set as input
 
     // Address bus A7-A0 pin
     ANSELB = 0x00;      // Disable analog function
