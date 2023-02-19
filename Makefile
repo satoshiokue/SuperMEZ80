@@ -8,7 +8,7 @@ PIC := 18F47Q43
 FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := disk/SDCard.c disk/SPI.c disk/diskio.c disk/utils.c
 
-INCS :=-Idisk -I$(FATFS_DIR)/source
+INCS :=-I. -Idisk -I$(FATFS_DIR)/source
 
 all: upload
 
