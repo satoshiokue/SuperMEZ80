@@ -44,3 +44,14 @@ void util_hexdump(const char *header, void *addr, int size)
         }
     }
 }
+
+void util_hexdump_sum(const char *header, void *addr, int size)
+{
+    util_hexdump(header, addr, size);
+
+    uint8_t sum = 0;
+    uint8_t *p = addr;
+    for (int i = 0; i < size; i++)
+        sum += *p++;
+    printf("%s%53s CHECKSUM: %02x\n\r", header, "", sum);
+}
