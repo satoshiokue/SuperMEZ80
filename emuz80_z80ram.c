@@ -335,6 +335,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         LATC = PIR9;            // Out PIR9
         break;
     case UART_DREG:
+        while (!U3RXIF);        // Wait for Rx interrupt flag set
         LATC = U3RXB;           // Out U3RXB
         break;
     case DISK_REG_FDCST:
