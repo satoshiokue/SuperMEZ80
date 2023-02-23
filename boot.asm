@@ -17,6 +17,7 @@ SECTS	EQU	SIZE/128	;# of sectors to load
 ;	I/O ports
 ;
 CONDAT	EQU	1		;console data port
+FDCDAT	EQU	8		;fdc-port: data (non-DMA)
 DRIVE   EQU	10		;fdc-port: # of drive
 TRACK   EQU	11		;fdc-port: # of track
 SECTOR  EQU	12		;fdc-port: # of sector
@@ -44,11 +45,7 @@ LSECT:	LD	A,B		;set track
 	OUT	(TRACK),A
 	LD	A,C		;set sector
 	OUT	(SECTOR),A
-	LD	A,L		;set dma address low
-	OUT	(DMAL),A
-	LD	A,H		;set dma address high
-	OUT	(DMAH),A
-	XOR	A		;read sector
+	LD	A,2		;read sector (non-DMA)
 	OUT	(FDCOP),A
 	IN	A,(FDCST)	;get status of fdc
 	OR	A		;read successful ?
@@ -64,17 +61,21 @@ STOP:	DI
 	HALT			;and halt cpu
 ;
 CONT:
+;
+;	read data to the destination address
+;
+	LD	E,128		;128 bytes per sector
+LBYTE:
+	IN	A,(FDCDAT)
+	LD	(HL),A
+	INC	HL
+	DEC	E
+	JP	NZ,LBYTE
 				;go to next sector if load is incomplete
 	DEC	D		;sects=sects-1
 	JP	Z,BOOT		;head for the bios
 ;
 ;	more sectors to load
-;
-;	we aren't using a stack, so use <sp> as scratch register
-;	to hold the load address increment
-;
-	LD	SP,128		;128 bytes per sector
-	ADD	HL,SP		;<hl> = <hl> + 128
 ;
 	INC	C		;sector = sector + 1
 	LD	A,C

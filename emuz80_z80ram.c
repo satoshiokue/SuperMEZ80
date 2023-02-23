@@ -36,11 +36,18 @@
 
 #define UART_DREG 0x01          // Data REG
 #define UART_CREG 0x00          // Control REG
+#define DISK_REG_DATA    8      // fdc-port: data (non-DMA)
 #define DISK_REG_DRIVE   10     // fdc-port: # of drive
 #define DISK_REG_TRACK   11     // fdc-port: # of track
 #define DISK_REG_SECTOR  12     // fdc-port: # of sector
 #define DISK_REG_FDCOP   13     // fdc-port: command
+#define DISK_OP_DMA_READ     0
+#define DISK_OP_DMA_WRITE    1
+#define DISK_OP_READ         2
+#define DISK_OP_WRITE        3
 #define DISK_REG_FDCST   14     // fdc-port: status
+#define DISK_ST_SUCCESS      0x00
+#define DISK_ST_ERROR        0xff
 #define DISK_REG_DMAL    15     // dma-port: dma address low
 #define DISK_REG_DMAH    16     // dma-port: dma address high
 
@@ -53,7 +60,7 @@
 extern const unsigned char rom[];
 static FATFS fs;
 static FIL file;
-static uint8_t buf[SECTOR_SIZE];
+static uint8_t disk_buf[SECTOR_SIZE];
 
 typedef struct {
     unsigned int sectors;
@@ -115,7 +122,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     static uint8_t disk_op = 0;
     static uint8_t disk_dmal = 0;
     static uint8_t disk_dmah = 0;
-    static uint8_t disk_stat = 0;
+    static uint8_t disk_stat = DISK_ST_ERROR;
+    static uint8_t *disk_datap = NULL;
 
     ab.l = PORTB;               // Read address low
 
@@ -129,6 +137,16 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case UART_DREG:
         while (!U3RXIF);        // Wait for Rx interrupt flag set
         LATC = U3RXB;           // Out U3RXB
+        break;
+    case DISK_REG_DATA:
+        if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
+            LATC = *disk_datap++;
+        } else {
+            #ifdef CPM_DISK_DEBUG
+            printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x (READ IGNORED)\n\r", disk_op,
+               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            #endif
+        }
         break;
     case DISK_REG_FDCST:
         LATC = disk_stat;
@@ -161,6 +179,19 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         while(!U3TXIF);
         U3TXB = PORTC;      // Write into    U3TXB
         break;
+    case DISK_REG_DATA:
+        if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
+            *disk_datap++ = PORTC;
+            if (DISK_OP_WRITE == DISK_OP_WRITE && (disk_datap - disk_buf) == SECTOR_SIZE) {
+                do_disk_io = 1;
+            }
+        } else {
+            #ifdef CPM_DISK_DEBUG
+            printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x DATA=%02x (IGNORED)\n\r", disk_op,
+               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
+            #endif
+        }
+        break;
     case DISK_REG_DRIVE:
         disk_drive = PORTC;
         break;
@@ -172,10 +203,12 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     case DISK_REG_FDCOP:
         disk_op = PORTC;
-        do_disk_io = 1;
+        if (disk_op != DISK_OP_WRITE) {
+            do_disk_io = 1;
+        }
         #ifdef CPM_DISK_DEBUG_VERBOSE
         printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ...\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
+               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
         #endif
         break;
     case DISK_REG_DMAL:
@@ -206,7 +239,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     G3POL = 0;
 
     if (NUM_DRIVES <= disk_drive || drives[disk_drive].filep == NULL) {
-        disk_stat = 0xff;   // error
+        disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
 
@@ -219,83 +252,115 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     unsigned int n;
     if (f_lseek(filep, sector * SECTOR_SIZE) != FR_OK) {
         printf("f_lseek(): ERROR\n\r");
-        disk_stat = 0xff;   // error
+        disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
-    if (disk_op == 0) {
+    if (disk_op == DISK_OP_DMA_READ || disk_op == DISK_OP_READ) {
         //
         // DISK read
         //
 
         // read from the DISK
-        if (f_read(filep, buf, SECTOR_SIZE, &n) != FR_OK) {
+        if (f_read(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
             printf("f_read(): ERROR\n\r");
-            disk_stat = 0xff;  // error
+            disk_stat = DISK_ST_ERROR;
             goto disk_io_done;
-        }
-
-        // transfer read data to SRAM
-        uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
-        TRISC = 0x00;       // Set as output to write to the SRAM
-        for(int i = 0; i < SECTOR_SIZE; i++) {
-            ab.w = addr;
-            LATD = ab.h;
-            LATB = ab.l;
-            addr++;
-            LATA2 = 0;      // activate /WE
-            LATC = buf[i];
-            LATA2 = 1;      // deactivate /WE
         }
 
         #ifdef CPM_DISK_DEBUG_VERBOSE
-        util_hexdump_sum("buf: ", buf, SECTOR_SIZE);
+        util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
         #endif
 
-        #ifdef CPM_MEM_DEBUG
-        // read back the SRAM
-        uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
-        printf("f_read(): SRAM address: %04x\n\r", addr);
-        TRISC = 0xff;       // Set as input to read from the SRAM
-        for(int i = 0; i < SECTOR_SIZE; i++) {
-            ab.w = addr;
-            LATD = ab.h;
-            LATB = ab.l;
-            addr++;
-            LATA4 = 0;      // activate /OE
-            for (int j = 0; j < 50; j++)
-                asm("nop");
-            buf[i] = PORTC;
-            LATA4 = 1;      // deactivate /OE
+        if (disk_op == DISK_OP_DMA_READ) {
+            //
+            // DMA read
+            //
+            // transfer read data to SRAM
+            uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
+            TRISC = 0x00;       // Set as output to write to the SRAM
+            for(int i = 0; i < SECTOR_SIZE; i++) {
+                ab.w = addr;
+                LATD = ab.h;
+                LATB = ab.l;
+                addr++;
+                LATA2 = 0;      // activate /WE
+                LATC = disk_buf[i];
+                LATA2 = 1;      // deactivate /WE
+            }
+            disk_datap = NULL;
+
+            #ifdef CPM_MEM_DEBUG
+            // read back the SRAM
+            uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
+            printf("f_read(): SRAM address: %04x\n\r", addr);
+            TRISC = 0xff;       // Set as input to read from the SRAM
+            for(int i = 0; i < SECTOR_SIZE; i++) {
+                ab.w = addr;
+                LATD = ab.h;
+                LATB = ab.l;
+                addr++;
+                LATA4 = 0;      // activate /OE
+                for (int j = 0; j < 50; j++)
+                    asm("nop");
+                disk_buf[i] = PORTC;
+                LATA4 = 1;      // deactivate /OE
+            }
+            util_hexdump_sum("RAM: ", disk_buf, SECTOR_SIZE);
+            #endif  // CPM_MEM_DEBUG
+        } else {
+            //
+            // non DMA read
+            //
+
+            // just set the read pointer to the heat of the buffer
+            disk_datap = disk_buf;
         }
-        util_hexdump_sum("RAM: ", buf, SECTOR_SIZE);
-        #endif  // CPM_MEM_DEBUG
-    } else {
+
+        disk_stat = DISK_ST_SUCCESS;
+
+    } else
+    if (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE) {
         //
         // DISK write
         //
+        if (disk_op == DISK_OP_DMA_WRITE) {
+            //
+            // DMA write
+            //
+            // transfer write data from SRAM to the buffer
+            uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
+            TRISC = 0xff;       // Set as input to read from the SRAM
+            for(int i = 0; i < SECTOR_SIZE; i++) {
+                ab.w = addr;
+                LATD = ab.h;
+                LATB = ab.l;
+                addr++;
+                LATA4 = 0;      // activate /OE
+                disk_buf[i] = LATC;
+                LATA4 = 1;      // deactivate /OE
+            }
+        } else {
+            //
+            // non DMA write
+            //
 
-        // transfer write data from SRAM to the buffer
-        uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
-        TRISC = 0xff;       // Set as input to read from the SRAM
-        for(int i = 0; i < SECTOR_SIZE; i++) {
-            ab.w = addr;
-            LATD = ab.h;
-            LATB = ab.l;
-            addr++;
-            LATA4 = 0;      // activate /OE
-            buf[i] = LATC;
-            LATA4 = 1;      // deactivate /OE
+            // writing data 128 bytes are in the buffer already
         }
 
         // write buffer to the DISK
-        if (f_write(filep, buf, SECTOR_SIZE, &n) != FR_OK || n != strlen(buf)) {
+        if (f_write(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
             printf("f_write(): ERROR\n\r");
-            disk_stat = 0xff;  // error
+            disk_stat = DISK_ST_ERROR;
             goto disk_io_done;
         }
-    }
 
-    disk_stat = 0x00;       // disk I/O succeeded
+        disk_stat = DISK_ST_SUCCESS;
+        disk_datap = NULL;
+
+    } else {
+        disk_stat = DISK_ST_ERROR;
+        disk_datap = NULL;
+    }
 
  disk_io_done:
     #ifdef CPM_DISK_DEBUG
@@ -410,6 +475,7 @@ void main(void) {
         //
         for (unsigned int drive = 0; drive < NUM_DRIVES && num_files < NUM_FILES; drive++) {
             char drive_letter = 'A' + drive;
+            char buf[22];
             sprintf(buf, "CPMDISKS/DRIVE%c.DSK", drive_letter);
             if (f_open(&files[num_files], buf, FA_READ|FA_WRITE) == FR_OK) {
                 printf("Image file DRIVE%c.DSK is assigned to drive %c\n\r",
