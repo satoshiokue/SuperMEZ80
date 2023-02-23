@@ -13,6 +13,7 @@ BIOSL	EQU	0300H		;length of the bios
 BOOT	EQU	BIOS
 SIZE	EQU	BIOS+BIOSL-CCP	;size of cp/m system
 SECTS	EQU	SIZE/128	;# of sectors to load
+DMABUFH	EQU	10H		;read buffer in lower memory (1000H)
 ;
 ;	I/O ports
 ;
@@ -44,9 +45,9 @@ LSECT:	LD	A,B		;set track
 	OUT	(TRACK),A
 	LD	A,C		;set sector
 	OUT	(SECTOR),A
-	LD	A,L		;set dma address low
+	XOR	A		;set dma buffer address low
 	OUT	(DMAL),A
-	LD	A,H		;set dma address high
+	LD	A,DMABUFH	;set dma buffer address high
 	OUT	(DMAH),A
 	XOR	A		;read sector
 	OUT	(FDCOP),A
@@ -64,17 +65,23 @@ STOP:	DI
 	HALT			;and halt cpu
 ;
 CONT:
+;
+;	copy read data from DMA buffer to the destination address
+;
+	LD	IX,DMABUFH*256	;set dma buffer address
+	LD	E,128		;128 bytes per sector
+MEMCPY:
+	LD	A,(IX)
+	LD	(HL),A
+	INC	IX
+	INC	HL
+        DEC	E
+	JP	NZ,MEMCPY
 				;go to next sector if load is incomplete
 	DEC	D		;sects=sects-1
 	JP	Z,BOOT		;head for the bios
 ;
 ;	more sectors to load
-;
-;	we aren't using a stack, so use <sp> as scratch register
-;	to hold the load address increment
-;
-	LD	SP,128		;128 bytes per sector
-	ADD	HL,SP		;<hl> = <hl> + 128
 ;
 	INC	C		;sector = sector + 1
 	LD	A,C

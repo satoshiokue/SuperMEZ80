@@ -28,12 +28,12 @@
 #include <SDCard.h>
 #include <utils.h>
 
-#define CPM_DISK_DEBUG
-#define CPM_MEM_DEBUG
+//#define CPM_DISK_DEBUG
+//#define CPM_DISK_DEBUG_VERBOSE
+//#define CPM_MEM_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
 
-#define ROM_SIZE 0x100          // 256 bytes
 #define UART_DREG 0x01          // Data REG
 #define UART_CREG 0x00          // Control REG
 #define DISK_REG_DRIVE   10     // fdc-port: # of drive
@@ -81,6 +81,13 @@ FIL files[NUM_FILES];
 int num_files = 0;
 
 #define NUM_DRIVES (sizeof(drives)/sizeof(*drives))
+
+const unsigned char rom[] = {
+// Initial program loader at 0x0000
+//#include "ipl.inc"
+// Modified boot sector at 0x0000
+#include "boot.inc"
+};
 
 // Address Bus
 union {
@@ -412,11 +419,15 @@ void main(void) {
             }
         }
     }
+    if (drives[0].filep == NULL) {
+        printf("No boot disk.\n\r");
+        while (1);
+    }
 
     //
     // Transfer ROM image to the SRAM
     //
-    for(i = 0; i < ROM_SIZE; i++) {
+    for(i = 0; i < sizeof(rom); i++) {
         ab.w = i;
         LATD = ab.h;
         LATB = ab.l;
@@ -552,11 +563,7 @@ void main(void) {
     LATE0 = 1;           // /BUSREQ=1
     LATE1 = 1;           // Release reset
 
+    printf("\n\r");
 
     while(1);  // All things come to those who wait
 }
-
-const unsigned char rom[ROM_SIZE] = {
-// Initial program loader at 0x0000
-#include "ipl.inc"
-};
