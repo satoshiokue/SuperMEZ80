@@ -22,6 +22,7 @@ CONDAT	EQU	1		;console data port
 PRTSTA	EQU	2		;printer status port
 PRTDAT	EQU	3		;printer data port
 AUXDAT	EQU	5		;auxiliary data port
+FDCDAT	EQU	8		;fdc-port: data (non-DMA)
 FDCD	EQU	10		;fdc-port: # of drive
 FDCT	EQU	11		;fdc-port: # of track
 FDCS	EQU	12		;fdc-port: # of sector
@@ -341,26 +342,68 @@ SECT1:	EX	DE,HL		;HL=.trans
 ;
 SETDMA: LD	A,C		;low order address
 	OUT	(DMAL),A
+	LD	HL,DSTL
+	LD	(HL),A
 	LD	A,B		;high order address
 	OUT	(DMAH),A	;in dma
+	LD	HL,DSTH
+	LD	(HL),A
 	RET
 ;
 ;	perform read operation
 ;
-READ:	XOR	A		;read command -> A
-	JP	WAITIO		;to perform the actual i/o
+READ:	LD	A,2		;read command -> A
+	OUT	(FDCOP),A	;start i/o operation
+	IN	A,(FDCST)	;status of i/o operation -> A
+	OR	A
+	RET	NZ		;return if an error occurred
+	; read 128 bytes from the I/O port
+	PUSH	DE
+	PUSH	HL
+	LD	E,128
+	LD	A,(DSTH)
+	LD	H,A
+	LD	A,(DSTL)
+	LD	L,A
+LREAD:
+	IN	A,(FDCDAT)
+	LD	(HL),A
+	INC	HL
+	DEC	E
+	JP	NZ,LREAD
+	POP	HL
+	POP	DE
+	LD	A,0
+	RET
+
 ;
 ;	perform a write operation
 ;
-WRITE:	LD	A,1		;write command -> A
-;
-;	enter here from read and write to perform the actual i/o
-;	operation.  return a 00h in register a if the operation completes
-;	properly, and 01h if an error occurs during the read or write
-;
-WAITIO: OUT	(FDCOP),A	;start i/o operation
+WRITE:	LD	A,3		;write command -> A
+	OUT	(FDCOP),A	;start i/o operation
+	; write 128 bytes from the I/O port
+	PUSH	DE
+	PUSH	HL
+	LD	E,128
+	LD	A,(DSTH)
+	LD	H,A
+	LD	A,(DSTL)
+	LD	L,A
+LWRITE:
+	LD	A,(HL)
+	OUT	(FDCDAT),A
+	INC	HL
+	DEC	E
+	JP	NZ,LWRITE
+	POP	HL
+	POP	DE
 	IN	A,(FDCST)	;status of i/o operation -> A
 	RET
+;
+;	disk I/O destination address in non DMA mode
+;
+DSTH:	DEFB	0		;disk I/O destination address high
+DSTL:	DEFB	0		;disk I/O destination address low
 ;
 ;	the remainder of the CBIOS is reserved uninitialized
 ;	data area, and does not need to be a part of the
