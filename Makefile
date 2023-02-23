@@ -12,22 +12,22 @@ INCS :=-I. -Idisk -I$(FATFS_DIR)/source
 
 all: drivea.dsk upload
 
-emuz80_z80ram.hex: emuz80_z80ram.c $(FATFS_SRCS) $(DISK_SRCS) ipl.inc boot.inc
+emuz80_z80ram.hex: emuz80_z80ram.c $(FATFS_SRCS) $(DISK_SRCS) ipl.inc
 	$(XC8) --chip=$(PIC) $(INCS) emuz80_z80ram.c $(FATFS_SRCS) $(DISK_SRCS)
 
 ipl.inc: ipl.z80
 	sjasmplus --raw=ipl.bin ipl.z80
 	cat ipl.bin | xxd -i > ipl.inc
 
-boot.inc: boot.asm
+boot.bin: boot.asm
 	sjasmplus --raw=boot.bin boot.asm
-	cat boot.bin | xxd -i > boot.inc
 
 bios.bin: bios.asm
 	sjasmplus --raw=bios.bin bios.asm
 
-drivea.dsk: bios.bin
+drivea.dsk: boot.bin bios.bin
 	dd if=z80pack-cpm2-1.dsk of=drivea.dsk bs=128
+	dd if=boot.bin of=drivea.dsk bs=128 seek=0  count=1 conv=notrunc
 	dd if=bios.bin of=drivea.dsk bs=128 seek=45 count=6 conv=notrunc
 
 upload: emuz80_z80ram.hex
@@ -36,6 +36,6 @@ upload: emuz80_z80ram.hex
         ./pp3 -c $(PORT) -s 1700 -v 2 -t $(PIC) $(CWD)/emuz80_z80ram.hex
 
 clean::
-	rm -f ipl.bin ipl.inc boot.bin boot.inc bios.bin
+	rm -f ipl.bin ipl.inc boot.bin bios.bin
 	rm -f *.as
 	rm -f *.p1 *.d *.hex *.pre *.lst *.cmf *.hxl *.sdb *.obj *.sym *.rlf *.elf

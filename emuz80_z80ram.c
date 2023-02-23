@@ -91,9 +91,7 @@ int num_files = 0;
 
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
-//#include "ipl.inc"
-// Modified boot sector at 0x0000
-#include "boot.inc"
+#include "ipl.inc"
 };
 
 // Address Bus
