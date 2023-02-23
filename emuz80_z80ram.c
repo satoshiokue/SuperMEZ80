@@ -47,7 +47,7 @@
 #define DISK_OP_WRITE        3
 #define DISK_REG_FDCST   14     // fdc-port: status
 #define DISK_ST_SUCCESS      0x00
-#define DISK_ST_ERROR        0xff
+#define DISK_ST_ERROR        0x01
 #define DISK_REG_DMAL    15     // dma-port: dma address low
 #define DISK_REG_DMAH    16     // dma-port: dma address high
 

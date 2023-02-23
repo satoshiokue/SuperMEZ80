@@ -45,6 +45,10 @@ LSECT:	LD	A,B		;set track
 	OUT	(TRACK),A
 	LD	A,C		;set sector
 	OUT	(SECTOR),A
+	LD	A,H
+	OUT	(DMAH),A
+	LD	A,L
+	OUT	(DMAL),A
 	LD	A,2		;read sector (non-DMA)
 	OUT	(FDCOP),A
 	IN	A,(FDCST)	;get status of fdc
