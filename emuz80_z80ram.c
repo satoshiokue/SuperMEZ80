@@ -133,7 +133,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         case DISK_REG_FDCOP:
             disk_op = PORTC;
             do_disk_io = 1;
-            #ifdef CPM_DISK_DEBUG
+            #ifdef CPM_DISK_DEBUG_VERBOSE
             printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ...\n\r", disk_op,
                    disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
             #endif
@@ -207,6 +207,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
                 LATA2 = 1;      // deactivate /WE
             }
 
+            #ifdef CPM_DISK_DEBUG_VERBOSE
+            util_hexdump_sum("buf: ", buf, SECTOR_SIZE);
+            #endif
+
             #ifdef CPM_MEM_DEBUG
             // read back the SRAM
             uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
@@ -218,10 +222,12 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
                 LATB = ab.l;
                 addr++;
                 LATA4 = 0;      // activate /OE
+                for (int j = 0; j < 50; j++)
+                    asm("nop");
                 buf[i] = PORTC;
                 LATA4 = 1;      // deactivate /OE
             }
-            util_hexdump("RAM: ", buf, SECTOR_SIZE);
+            util_hexdump_sum("RAM: ", buf, SECTOR_SIZE);
             #endif  // CPM_MEM_DEBUG
         } else {
             //
@@ -264,6 +270,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
         RA4PPS = 0x01;          // CLC1 -> RA4 -> /OE
         RA2PPS = 0x02;          // CLC2 -> RA2 -> /WE
+
+        for (int j = 0; j < 50; j++)
+            asm("nop");
+
         LATE0 = 1;              // /BUSREQ is deactive
 
         CLC3IF = 0;             // Clear interrupt flag
@@ -382,13 +392,12 @@ void main(void) {
 
     RA2PPS = 0x00;      // LATA2 -> RA2
 
+    printf("\n\r");
     //
     // Initialize SD Card
     //
     SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100);
-    if (f_mount(&fs, "0://", 1) != FR_OK) {
-        printf("f_mount(): ERROR\n\r");
-    } else {
+    if (f_mount(&fs, "0://", 1) == FR_OK) {
         //
         // Open disk images
         //
