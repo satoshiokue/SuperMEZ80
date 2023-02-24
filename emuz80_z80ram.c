@@ -201,7 +201,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     case DISK_REG_FDCOP:
         disk_op = PORTC;
-        if (disk_op != DISK_OP_WRITE) {
+        if (disk_op == DISK_OP_WRITE) {
+            disk_datap = disk_buf;
+        } else {
             do_disk_io = 1;
         }
         #ifdef CPM_DISK_DEBUG_VERBOSE
