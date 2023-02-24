@@ -374,8 +374,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     RA4PPS = 0x01;          // CLC1 -> RA4 -> /OE
     RA2PPS = 0x02;          // CLC2 -> RA2 -> /WE
 
+#if 0
     for (int j = 0; j < 50; j++)
         asm("nop");
+#endif
 
     LATE0 = 1;              // /BUSREQ is deactive
 
