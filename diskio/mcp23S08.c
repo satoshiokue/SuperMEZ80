@@ -94,13 +94,7 @@ void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, 
     spi->begin(spi);
     spi->configure(spi, clock_delay, SPI_MSBFIRST, SPI_MODE0);
 
-    #ifdef MCP23S08_DEBUG
-    uint8_t iodir, gpio;
-    iodir = mcp23S08_reg_read(ctx, REG_IODIR);
-    gpio = mcp23S08_reg_read(ctx, REG_GPIO);
-    dprintf(("MCP23S08:   IODIR: %02x\n\r", iodir));
-    dprintf(("MCP23S08:    GPIO: %02x\n\r", gpio));
-    #endif
+    mcp23s08_dump_regs(ctx, "");
 }
 
 void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode)
@@ -121,4 +115,27 @@ void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val)
         ctx->olat &= ~(1UL<<gpio);
     }
     mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
+}
+
+void mcp23s08_dump_regs(struct MCP23S08 *ctx, const char *header)
+{
+    #ifdef MCP23S08_DEBUG
+    static const char *reg_names[] = {
+        "IODIR",
+        "IPOL",
+        "GPINTEN",
+        "DEFVAL",
+        "INTCON",
+        "IOCON",
+        "GPPU",
+        "INTF",
+        "INTCAP",
+        "GPIO",
+        "OLAT" };
+    for (unsigned int i = 0; i < sizeof(reg_names)/sizeof(*reg_names); i++) {
+        uint8_t val;
+        val = mcp23S08_reg_read(ctx, i);
+        dprintf(("%sMCP23S08:%8s: %02x\n\r", header, reg_names[i], val));
+    }
+    #endif  // MCP23S08_DEBUG
 }
