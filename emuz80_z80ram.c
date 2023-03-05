@@ -120,6 +120,23 @@ void putch(char c) {
     U3TXB = c;                  // Write data
 }
 
+void acquire_addrbus(uint32_t addr)
+{
+    mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A16, ((addr >> 16) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_OUTPUT);
+}
+
+void release_addrbus(void)
+{
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_INPUT);
+}
+
 // Never called, logically
 void __interrupt(irq(default),base(8)) Default_ISR(){}
 
@@ -504,13 +521,7 @@ void main(void) {
     mcp23s08_write(MCP23S08_ctx, GPIO_INT, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_INT, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
-    mcp23s08_pinmode(MCP23S08_ctx,GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
-    mcp23s08_write(MCP23S08_ctx, GPIO_A14, 0);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
-    mcp23s08_write(MCP23S08_ctx, GPIO_A15, 0);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
-    mcp23s08_write(MCP23S08_ctx, GPIO_A16, 0);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
 
     //
     // Initialize SD Card
@@ -542,6 +553,7 @@ void main(void) {
     //
     // Transfer ROM image to the SRAM
     //
+    acquire_addrbus(0x00000);
     for(i = 0; i < sizeof(rom); i++) {
         ab.w = i;
         LATD = ab.h;
@@ -550,6 +562,7 @@ void main(void) {
         LATC = rom[i];
         LATA2 = 1;      // /WE=1
     }
+    release_addrbus();
 
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
     ANSELD = 0x00;      // Disable analog function
