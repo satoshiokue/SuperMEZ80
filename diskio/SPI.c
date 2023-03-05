@@ -24,10 +24,11 @@
 #include <xc.h>
 #include <stdio.h>
 #include "SPI.h"
+#ifdef SPI_USE_MCP23S08
+#include "mcp23s08.h"
+#endif
 
-#define __C(a, b) a ## _ ## b
-#define C(a, b) __C(a, b)
-#define SPI(a) C(SPI_PREFIX, a)
+#include <picconfig.h>
 
 static struct SPI_SW {
     struct SPI spi;
@@ -80,7 +81,7 @@ void SPI(begin_transaction)(struct SPI *ctx_)
 
     SPI(CLK) = ctx->clk_polarity ? 1 : 0;  // set clock in idle state
     SPI(PICO) = 1;  // set PICO as high (SPI standard does not require this but SD card does)
-    SPI(CS) = 0;  // start transaction
+    SPI(select)(ctx_, 1);  // select the chip and start transaction
 }
 
 // reverse bit order of given byte
@@ -298,7 +299,7 @@ void SPI(receive)(struct SPI *ctx_, void *buf, int count)
 void SPI(end_transaction)(struct SPI *ctx_)
 {
     struct SPI_SW *ctx = (struct SPI_SW *)ctx_;
-    SPI(CS) = 1;  // end transaction
+    SPI(select)(ctx_, 0);  // de-select the chip and end transaction
     TRISC = ctx->trisc;  // restore direction settings
 }
 
@@ -330,19 +331,18 @@ uint8_t SPI(receive_byte)(struct SPI *ctx_)
     return dummy;
 }
 
-static struct SPI_SW ctx_ = {
-    {
-        SPI(begin),
-        SPI(configure),
-        SPI(begin_transaction),
-        SPI(transfer_byte),
-        SPI(transfer),
-        SPI(send),
-        SPI(receive),
-        SPI(end_transaction),
-        SPI(dummy_clocks),
-        SPI(receive_byte),
-    },
-};
+void SPI(select)(struct SPI *ctx_, int select)
+{
+#ifdef SPI_USE_MCP23S08
+    mcp23s08_write(MCP23S08_ctx, SPI(CS_PORT), select ? 0 : 1);
+
+    // Fix me...
+    __delay_us(400);
+#else
+    SPI(CS) = select ? 0 : 1;
+#endif
+}
+
+static struct SPI_SW ctx_ = { 0 };
 
 struct SPI *SPI(ctx) = (struct SPI *)&ctx_;

@@ -26,6 +26,8 @@
 #include <string.h>
 #include <ff.h>
 #include <SDCard.h>
+#include <SPI.h>
+#include <mcp23s08.h>
 #include <utils.h>
 
 //#define CPM_DISK_DEBUG
@@ -55,6 +57,15 @@
 #define SPI_CLOCK_2MHZ 0        // Maximum speed w/o any wait (1~2 MHz)
 #define NUM_FILES 8
 #define SECTOR_SIZE 128
+
+#define GPIO_CS0    0
+#define GPIO_CS1    1
+#define GPIO_LED    2
+#define GPIO_INT    3
+#define GPIO_NMI    4
+#define GPIO_A14    5
+#define GPIO_A15    6
+#define GPIO_A16    7
 
 // Z80 ROM equivalent, see end of this file
 extern const unsigned char rom[];
@@ -476,6 +487,27 @@ void main(void) {
     printf("                       \r");
 
     printf("\n\r");
+
+    //
+    // Say Hello to SPI I/O expander MCP23S08
+    //
+    mcp23s08_init(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_100KHZ, 0 /* address */);
+    mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS0, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_CS1, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS1, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_LED, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_INT, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_INT, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
+    mcp23s08_pinmode(MCP23S08_ctx,GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A14, 0);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A15, 0);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A16, 0);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_OUTPUT);
 
     //
     // Initialize SD Card

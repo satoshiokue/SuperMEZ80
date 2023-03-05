@@ -28,6 +28,8 @@
 
 #include <picconfig.h>
 
+#define SPI_PREFIX SPI1
+
 // #define MCP23S08_DEBUG
 #if defined(MCP23S08_DEBUG)
 #define dprintf(args) do { printf args; } while(0)
@@ -62,11 +64,11 @@ static uint8_t mcp23S08_reg_read(struct MCP23S08 *ctx, uint8_t reg)
     uint8_t buf[3];
     buf[0] = 0x41 | (ctx->addr) << 1;  // read
     buf[1] = reg;
-    spi->begin_transaction(spi);
-    spi->begin_transaction(spi);
-    spi->send(spi, buf, 2);
-    buf[2] = spi->receive_byte(spi);
-    spi->end_transaction(spi);
+    SPI(begin_transaction)(spi);
+    SPI(begin_transaction)(spi);
+    SPI(send)(spi, buf, 2);
+    buf[2] = SPI(receive_byte)(spi);
+    SPI(end_transaction)(spi);
     return buf[2];
 }
 
@@ -77,9 +79,9 @@ static void mcp23S08_reg_write(struct MCP23S08 *ctx, uint8_t reg, uint8_t val)
     buf[0] = 0x40 | (ctx->addr) << 1;  // read
     buf[1] = reg;
     buf[2] = val;
-    spi->begin_transaction(spi);
-    spi->send(spi, buf, 3);
-    spi->end_transaction(spi);
+    SPI(begin_transaction)(spi);
+    SPI(send)(spi, buf, 3);
+    SPI(end_transaction)(spi);
 }
 
 void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, uint8_t addr)
@@ -91,8 +93,8 @@ void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, 
     ctx->olat = 0;
     dprintf(("\n\rMCP23S08: initialize ...\n\r"));
 
-    spi->begin(spi);
-    spi->configure(spi, clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(begin)(spi);
+    SPI(configure)(spi, clock_delay, SPI_MSBFIRST, SPI_MODE0);
 
     mcp23s08_dump_regs(ctx, "");
 }
