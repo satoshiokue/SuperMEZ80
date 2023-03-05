@@ -183,6 +183,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     // Z80 IO write cycle
     int do_disk_io = 0;
+    int led_on = 0;
     switch (ab.l) {
     case UART_DREG:
         while(!U3TXIF);
@@ -248,6 +249,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     G3POL = 1;          // Release wait (D-FF reset)
     G3POL = 0;
+
+    // turn on the LED
+    led_on = 1;
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, 0);
 
     if (NUM_DRIVES <= disk_drive || drives[disk_drive].filep == NULL) {
         disk_stat = DISK_ST_ERROR;
@@ -378,6 +383,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
            disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, disk_stat);
     #endif
+
+    if (led_on)  // turn off the LED
+        mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
 
     // Set address bus as input
     TRISD = 0x7f;           // A15-A8 pin (A14:/RFSH, A15:/WAIT)
