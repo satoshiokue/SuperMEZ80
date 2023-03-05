@@ -18,9 +18,12 @@ SRCS := $(SRC_DIR)/emuz80_z80ram.c
 
 INCS :=-I$(SRC_DIR) -I$(DISKIO_DIR) -I$(FATFS_DIR)/source
 
+HDRS := picconfig.h \
+        $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/SPI.h $(DISKIO_DIR)/SDCard.h $(DISKIO_DIR)/mcp23s08.h
+
 all: emuz80_z80ram.hex $(CPM2_DIR)/drivea.dsk
 
-emuz80_z80ram.hex: $(SRCS) $(FATFS_SRCS) $(DISK_SRCS) $(SRC_DIR)/ipl.inc
+emuz80_z80ram.hex: $(SRCS) $(FATFS_SRCS) $(DISK_SRCS) $(SRC_DIR)/ipl.inc $(HDRS)
 	cd $(SRC_DIR); \
         $(XC8) --chip=$(PIC) $(INCS) $(SRCS) $(FATFS_SRCS) $(DISK_SRCS)
 
