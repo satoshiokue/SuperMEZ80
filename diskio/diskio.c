@@ -69,7 +69,16 @@ DSTATUS disk_initialize(BYTE pdrv)
         dprintf(("no MBR signature\n\r"));
         return STA_NODISK;
     }
-    if (buf[66] != 0x0b) {
+    //
+    // 0x01 FAT12
+    // 0x04 FAT16 (up to 32MB)
+    // 0x06 FAT16 (over 32MB)
+    // 0x0b FAT32
+    // 0x0c FAT32 LBA
+    // 0x0e FAT16 LBA
+    //
+    if (buf[66] != 0x01 && buf[66] != 0x04 && buf[66] != 0x06 &&
+        buf[66] != 0x0b && buf[66] != 0x0c && buf[66] != 0x0e) {
         dprintf(("no FAT32 partition\n\r"));
         return STA_NODISK;
     }
