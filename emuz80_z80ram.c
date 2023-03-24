@@ -58,6 +58,9 @@
 #define NUM_FILES 8
 #define SECTOR_SIZE 128
 
+#define HIGH_ADDR_MASK    0x0001c000
+#define LOW_ADDR_MASK     0x00003fff
+
 #define GPIO_CS0    0
 #define GPIO_CS1    1
 #define GPIO_LED    2
@@ -137,6 +140,82 @@ void release_addrbus(void)
 
     // A16 must always be driven by MCP23S08
     //mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_INPUT);
+}
+
+void dma_write_to_sram(uint32_t dest, uint8_t *buf, int len)
+{
+    uint16_t addr = (dest & LOW_ADDR_MASK);
+    uint16_t second_half = 0;
+    int i;
+
+    if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + SECTOR_SIZE)
+        second_half = (uint16_t)(((uint32_t)addr + SECTOR_SIZE) - ((uint32_t)LOW_ADDR_MASK + 1));
+
+    acquire_addrbus(dest);
+    TRISC = 0x00;       // Set as output to write to the SRAM
+    for(i = 0; i < SECTOR_SIZE - second_half; i++) {
+        ab.w = addr;
+        LATD = ab.h;
+        LATB = ab.l;
+        addr++;
+        LATA2 = 0;      // activate /WE
+        LATC = disk_buf[i];
+        LATA2 = 1;      // deactivate /WE
+    }
+
+    if (0 < second_half)
+        acquire_addrbus(dest + i);
+    for( ; i < SECTOR_SIZE; i++) {
+        ab.w = addr;
+        LATD = ab.h;
+        LATB = ab.l;
+        addr++;
+        LATA2 = 0;      // activate /WE
+        LATC = disk_buf[i];
+        LATA2 = 1;      // deactivate /WE
+    }
+
+    release_addrbus();
+}
+
+void dma_read_from_sram(uint32_t dest, uint8_t *buf, int len)
+{
+    uint16_t addr = (dest & LOW_ADDR_MASK);
+    uint16_t second_half = 0;
+    int i;
+
+    if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + SECTOR_SIZE)
+        second_half = (uint16_t)(((uint32_t)addr + SECTOR_SIZE) - ((uint32_t)LOW_ADDR_MASK + 1));
+
+    acquire_addrbus(dest);
+    TRISC = 0xff;       // Set as input to read from the SRAM
+    for(i = 0; i < SECTOR_SIZE - second_half; i++) {
+        ab.w = addr;
+        LATD = ab.h;
+        LATB = ab.l;
+        addr++;
+        LATA4 = 0;      // activate /OE
+        for (int j = 0; j < 50; j++)
+            asm("nop");
+        disk_buf[i] = PORTC;
+        LATA4 = 1;      // deactivate /OE
+    }
+
+    if (0 < second_half)
+        acquire_addrbus(dest + i);
+    for( ; i < SECTOR_SIZE; i++) {
+        ab.w = addr;
+        LATD = ab.h;
+        LATB = ab.l;
+        addr++;
+        LATA4 = 0;      // activate /OE
+        for (int j = 0; j < 50; j++)
+            asm("nop");
+        disk_buf[i] = PORTC;
+        LATA4 = 1;      // deactivate /OE
+    }
+
+    release_addrbus();
 }
 
 // Never called, logically
@@ -312,34 +391,14 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             //
             // transfer read data to SRAM
             uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
-            TRISC = 0x00;       // Set as output to write to the SRAM
-            for(int i = 0; i < SECTOR_SIZE; i++) {
-                ab.w = addr;
-                LATD = ab.h;
-                LATB = ab.l;
-                addr++;
-                LATA2 = 0;      // activate /WE
-                LATC = disk_buf[i];
-                LATA2 = 1;      // deactivate /WE
-            }
+            dma_write_to_sram(addr, disk_buf, SECTOR_SIZE);
             disk_datap = NULL;
 
             #ifdef CPM_MEM_DEBUG
             // read back the SRAM
             uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
             printf("f_read(): SRAM address: %04x\n\r", addr);
-            TRISC = 0xff;       // Set as input to read from the SRAM
-            for(int i = 0; i < SECTOR_SIZE; i++) {
-                ab.w = addr;
-                LATD = ab.h;
-                LATB = ab.l;
-                addr++;
-                LATA4 = 0;      // activate /OE
-                for (int j = 0; j < 50; j++)
-                    asm("nop");
-                disk_buf[i] = PORTC;
-                LATA4 = 1;      // deactivate /OE
-            }
+            dma_read_from_sram(addr, disk_buf, SECTOR_SIZE);
             util_hexdump_sum("RAM: ", disk_buf, SECTOR_SIZE);
             #endif  // CPM_MEM_DEBUG
         } else {
@@ -364,16 +423,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             //
             // transfer write data from SRAM to the buffer
             uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
-            TRISC = 0xff;       // Set as input to read from the SRAM
-            for(int i = 0; i < SECTOR_SIZE; i++) {
-                ab.w = addr;
-                LATD = ab.h;
-                LATB = ab.l;
-                addr++;
-                LATA4 = 0;      // activate /OE
-                disk_buf[i] = LATC;
-                LATA4 = 1;      // deactivate /OE
-            }
+            dma_read_from_sram(addr, disk_buf, SECTOR_SIZE);
         } else {
             //
             // non DMA write
