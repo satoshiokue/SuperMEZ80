@@ -42,10 +42,21 @@ BOOT:
 ;
 ERRMSG:	DEFM	'BOOT: error booting'
 	DEFB	13,10,0
+HLOMSG:	DEFM	'CP/M 2.2 boot-loader for Z80-Simulator'
+	DEFB	13,10,0
 ;
 ;	begin the load operation
 ;
-COLD:	LD	BC,1		;b=track 0, c=sector 1
+COLD:
+	LD	HL,HLOMSG
+PRTMSG0:
+	LD	A,(HL)
+	OUT	(CONDAT),A
+	INC	HL
+	OR	A
+	JP	NZ,PRTMSG0
+
+	LD	BC,1		;b=track 0, c=sector 1
 	LD	HL,BOOT		;base transfer address
 	XOR	A		;select drive A
 	OUT	(DRIVE),A
@@ -62,7 +73,15 @@ LSECT:	LD	A,B		;set track
 	IN	A,(FDCST)	;get status of fdc
 	OR	A		;read successful ?
 	JP	Z,BOOT		;yes, continue
-	LD	HL,ERRMSG	;no, print error
+
+	ADD	A,'0'		;print error status
+	OUT	(CONDAT),A
+	LD	A,13
+	OUT	(CONDAT),A
+	LD	A,10
+	OUT	(CONDAT),A
+
+	LD	HL,ERRMSG	;print error message
 PRTMSG:	LD	A,(HL)
 	OR	A
 	JP	Z,STOP
