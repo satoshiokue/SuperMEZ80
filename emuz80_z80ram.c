@@ -466,7 +466,17 @@ void main(void) {
 
     RA2PPS = 0x00;      // LATA2 -> RA2
 
+    //
+    // Give a chance to use PRC (RB6/A6) and PRD (RB7/A7) to PIC programer.
+    // It must prevent Z80 from driving A6 and A7 while this period.
+    //
     printf("\n\r");
+    printf("wait for programmer ...\r");
+    __delay_ms(200);
+    printf("                       \r");
+
+    printf("\n\r");
+
     //
     // Initialize SD Card
     //
