@@ -466,25 +466,37 @@ void main(void) {
 
     RA2PPS = 0x00;      // LATA2 -> RA2
 
+    //
+    // Give a chance to use PRC (RB6/A6) and PRD (RB7/A7) to PIC programer.
+    // It must prevent Z80 from driving A6 and A7 while this period.
+    //
     printf("\n\r");
+    printf("wait for programmer ...\r");
+    __delay_ms(200);
+    printf("                       \r");
+
+    printf("\n\r");
+
     //
     // Initialize SD Card
     //
     SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100);
-    if (f_mount(&fs, "0://", 1) == FR_OK) {
-        //
-        // Open disk images
-        //
-        for (unsigned int drive = 0; drive < NUM_DRIVES && num_files < NUM_FILES; drive++) {
-            char drive_letter = 'A' + drive;
-            char buf[22];
-            sprintf(buf, "CPMDISKS/DRIVE%c.DSK", drive_letter);
-            if (f_open(&files[num_files], buf, FA_READ|FA_WRITE) == FR_OK) {
-                printf("Image file DRIVE%c.DSK is assigned to drive %c\n\r",
-                       drive_letter, drive_letter);
-                drives[drive].filep = &files[num_files];
-                num_files++;
-            }
+    if (f_mount(&fs, "0://", 1) != FR_OK) {
+        printf("Failed to mount SD Card mount.\n\r");
+        while (1);
+    }
+    //
+    // Open disk images
+    //
+    for (unsigned int drive = 0; drive < NUM_DRIVES && num_files < NUM_FILES; drive++) {
+        char drive_letter = 'A' + drive;
+        char buf[22];
+        sprintf(buf, "CPMDISKS/DRIVE%c.DSK", drive_letter);
+        if (f_open(&files[num_files], buf, FA_READ|FA_WRITE) == FR_OK) {
+            printf("Image file DRIVE%c.DSK is assigned to drive %c\n\r",
+                   drive_letter, drive_letter);
+            drives[drive].filep = &files[num_files];
+            num_files++;
         }
     }
     if (drives[0].filep == NULL) {

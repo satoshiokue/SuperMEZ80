@@ -39,6 +39,12 @@ static struct SDCard {
 } ctx_ = { 0 };
 #define ctx (&ctx_)
 
+SDCard_end_transaction()
+{
+    SPI_end_transaction();
+    SPI_dummy_clocks(1);
+}
+
 int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t timeout)
 {
     ctx->clock_delay = clock_delay;
@@ -51,7 +57,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
     SPI_configure(initial_clock_delay, SPI_MSBFIRST, SPI_MODE0);
     SPI_begin_transaction();
     SPI_dummy_clocks(10);
-    SPI_end_transaction();
+    SDCard_end_transaction();
 
     // CMD0 go idle state
     SDCard_command(0, 0, buf, 1);
@@ -199,14 +205,14 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
             result = SDCARD_CRC_ERROR;
             goto done;
         }
-        SPI_end_transaction();
+        SDCard_end_transaction();
         goto retry;
     }
 
     result = SDCARD_SUCCESS;
 
  done:
-    SPI_end_transaction();
+    SDCard_end_transaction();
     return result;
 }
 
@@ -262,7 +268,7 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
                 goto done;
             }
             __SDCard_wait_response(0xff, 30000);
-            SPI_end_transaction();
+            SDCard_end_transaction();
             goto retry;
         }
         result = SDCARD_BADRESPONSE;
@@ -279,7 +285,7 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
     result = SDCARD_SUCCESS;
 
  done:
-    SPI_end_transaction();
+    SDCard_end_transaction();
     return result;
 }
 
@@ -290,12 +296,12 @@ int SDCard_command(uint8_t command, uint32_t argument, void *response_buffer, in
 
     result = __SDCard_command_r1(command, argument, responsep);
     if (result != SDCARD_SUCCESS) {
-        SPI_end_transaction();
+        SDCard_end_transaction();
         return result;
     }
 
     SPI_receive(&responsep[1], length - 1);
-    SPI_end_transaction();
+    SDCard_end_transaction();
 
     return SDCARD_SUCCESS;
 }

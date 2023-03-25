@@ -1,12 +1,14 @@
 PJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 XC8 := /Applications/microchip/xc8/v2.40/bin/xc8
-PP3_DIR := $(PJ_DIR)/../Arduino-PIC-Programmer
 FATFS_DIR := $(PJ_DIR)/../FatFs
 DISKIO_DIR := $(PJ_DIR)/diskio
 SRC_DIR := $(PJ_DIR)
 CPM2_DIR := $(PJ_DIR)/cpm2
 PORT := /dev/tty.usbmodem1444301
 PIC := 18F47Q43
+
+#PP3_DIR := $(PJ_DIR)/../a-p-prog/sw
+PP3_OPTS := -c $(PORT) -s 1700 -v 2 -r 30 -t $(PIC)
 
 FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := $(DISKIO_DIR)/SDCard.c $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/diskio.c \
@@ -41,9 +43,15 @@ $(CPM2_DIR)/drivea.dsk: $(CPM2_DIR)/boot.bin $(CPM2_DIR)/bios.bin
 	dd if=bios.bin of=drivea.dsk bs=128 seek=45 count=6 conv=notrunc
 
 upload: emuz80_z80ram.hex
-	cd $(PP3_DIR); \
-        ./pp3 -c $(PORT) -s 1700 -v 2 -t $(PIC) $(PJ_DIR)/emuz80_z80ram.hex || \
-        ./pp3 -c $(PORT) -s 1700 -v 2 -t $(PIC) $(PJ_DIR)/emuz80_z80ram.hex
+	if [ .$(PP3_DIR) != . ]; then \
+            echo using $(PP3_DIR)/pp3; \
+            cd $(PP3_DIR); \
+            ./pp3 $(PP3_OPTS) $(PJ_DIR)/emuz80_z80ram.hex || \
+            ./pp3 $(PP3_OPTS) $(PJ_DIR)/emuz80_z80ram.hex; \
+        else \
+            echo using `which pp3`; \
+            pp3 $(PP3_OPTS) $(PJ_DIR)/emuz80_z80ram.hex; \
+        fi
 
 clean::
 	cd $(SRC_DIR); rm -f ipl.bin ipl.inc
