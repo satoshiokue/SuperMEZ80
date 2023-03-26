@@ -134,7 +134,9 @@ void release_addrbus(void)
 {
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_INPUT);
+
+    // A16 must always be driven by MCP23S08
+    //mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_INPUT);
 }
 
 // Never called, logically
