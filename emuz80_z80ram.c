@@ -588,9 +588,14 @@ void main(void) {
     //
     // Initialize SD Card
     //
-    if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) != SDCARD_SUCCESS) {
-        printf("No SD Card?\n\r");
-        while (1);
+    for (int retry = 0; 1; retry++) {
+        if (20 <= retry) {
+            printf("No SD Card?\n\r");
+            while (1);
+        }
+        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
+            break;
+        __delay_ms(200);
     }
     if (f_mount(&fs, "0://", 1) != FR_OK) {
         printf("Failed to mount SD Card.\n\r");
