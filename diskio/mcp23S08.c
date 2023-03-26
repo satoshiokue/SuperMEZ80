@@ -65,7 +65,6 @@ static uint8_t mcp23S08_reg_read(struct MCP23S08 *ctx, uint8_t reg)
     buf[0] = 0x41 | (ctx->addr) << 1;  // read
     buf[1] = reg;
     SPI(begin_transaction)(spi);
-    SPI(begin_transaction)(spi);
     SPI(send)(spi, buf, 2);
     buf[2] = SPI(receive_byte)(spi);
     SPI(end_transaction)(spi);
