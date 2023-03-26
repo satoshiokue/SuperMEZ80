@@ -334,13 +334,14 @@ uint8_t SPI(receive_byte)(struct SPI *ctx_)
 void SPI(select)(struct SPI *ctx_, int select)
 {
 #ifdef SPI_USE_MCP23S08
-    mcp23s08_write(MCP23S08_ctx, SPI(CS_PORT), select ? 0 : 1);
+    if (mcp23s08_is_alive(MCP23S08_ctx)) {
+        mcp23s08_write(MCP23S08_ctx, SPI(CS_PORT), select ? 0 : 1);
 
-    // Fix me...
-    __delay_us(400);
-#else
-    SPI(CS) = select ? 0 : 1;
+        // Fix me...
+        __delay_us(400);
+    } else
 #endif
+    SPI(CS) = select ? 0 : 1;
 }
 
 static struct SPI_SW ctx_ = { 0 };

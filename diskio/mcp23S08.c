@@ -39,6 +39,7 @@
 
 static struct MCP23S08 {
     struct SPI *spi;
+    int alive;
     uint16_t clock_delay;
     uint8_t addr;
     uint8_t dir;
@@ -57,6 +58,21 @@ struct MCP23S08 *MCP23S08_ctx = &ctx_;
 #define REG_INTCAP   0x08
 #define REG_GPIO     0x09
 #define REG_OLAT     0x0a
+
+#ifdef MCP23S08_DEBUG
+static const char *reg_names[] = {
+    "IODIR",
+    "IPOL",
+    "GPINTEN",
+    "DEFVAL",
+    "INTCON",
+    "IOCON",
+    "GPPU",
+    "INTF",
+    "INTCAP",
+    "GPIO",
+    "OLAT" };
+#endif
 
 static uint8_t mcp23S08_reg_read(struct MCP23S08 *ctx, uint8_t reg)
 {
@@ -96,10 +112,71 @@ void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, 
     SPI(configure)(spi, clock_delay, SPI_MSBFIRST, SPI_MODE0);
 
     mcp23s08_dump_regs(ctx, "");
+
+    ctx->alive = 1;
+}
+
+int mcp23s08_probe(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, uint8_t addr)
+{
+    int result;
+    uint8_t saved_iodir, saved_gppu, saved_olat;
+    static struct {
+        uint8_t reg;
+        uint8_t val;
+    } test_vector[] = {
+        { REG_IODIR, 0xff },  // All pins are configures as input
+        { REG_GPPU, 0x00 },
+        { REG_GPPU, 0xa5 },
+        { REG_GPPU, 0x5a },
+        { REG_GPPU, 0xff },
+        { REG_OLAT, 0x00 },
+        { REG_OLAT, 0xa5 },
+        { REG_OLAT, 0x5a },
+        { REG_OLAT, 0xff },
+    };
+
+    mcp23s08_init(ctx, spi, clock_delay, addr);
+
+    saved_iodir = mcp23S08_reg_read(ctx, REG_IODIR);
+    saved_gppu = mcp23S08_reg_read(ctx, REG_GPPU);
+    saved_olat = mcp23S08_reg_read(ctx, REG_OLAT);
+
+    for (unsigned int i = 0; i < sizeof(test_vector)/sizeof(*test_vector); i++) {
+        uint8_t reg = test_vector[i].reg;
+        uint8_t val = test_vector[i].val;
+        mcp23S08_reg_write(ctx, reg, val);
+        uint8_t v = mcp23S08_reg_read(ctx, reg);
+        dprintf(("MCP23S08: probe %8s: %02x %s %02x\n\r", reg_names[reg], val,
+                 (v == val)?"==":"!=", v));
+        if (v != val) {
+            result = i + 1;
+            goto done;
+        }
+    }
+
+    result = 0;  // no error. probe succeeded.
+
+ done:
+    mcp23S08_reg_write(ctx, REG_OLAT, saved_olat);
+    mcp23S08_reg_write(ctx, REG_GPPU, saved_gppu);
+    mcp23S08_reg_write(ctx, REG_IODIR, saved_iodir);
+    mcp23s08_dump_regs(ctx, "");
+
+    if (result != 0)
+        ctx->alive = 0;
+
+    return result;
+}
+
+int mcp23s08_is_alive(struct MCP23S08 *ctx)
+{
+    return ctx->alive;
 }
 
 void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode)
 {
+    if (!ctx->alive)
+        return;
     if (mode == MCP23S08_PINMODE_OUTPUT) {
         ctx->dir &= ~(1UL<<gpio);
     } else {
@@ -110,6 +187,8 @@ void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode)
 
 void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val)
 {
+    if (!ctx->alive)
+        return;
     if (val) {
         ctx->olat |= (1UL<<gpio);
     } else {
@@ -121,18 +200,6 @@ void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val)
 void mcp23s08_dump_regs(struct MCP23S08 *ctx, const char *header)
 {
     #ifdef MCP23S08_DEBUG
-    static const char *reg_names[] = {
-        "IODIR",
-        "IPOL",
-        "GPINTEN",
-        "DEFVAL",
-        "INTCON",
-        "IOCON",
-        "GPPU",
-        "INTF",
-        "INTCAP",
-        "GPIO",
-        "OLAT" };
     for (unsigned int i = 0; i < sizeof(reg_names)/sizeof(*reg_names); i++) {
         uint8_t val;
         val = mcp23S08_reg_read(ctx, i);

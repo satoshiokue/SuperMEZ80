@@ -125,6 +125,14 @@ void putch(char c) {
 
 void acquire_addrbus(uint32_t addr)
 {
+    static no_mcp23s08_warn = 1;
+
+    if (no_mcp23s08_warn && (addr & HIGH_ADDR_MASK) != 0) {
+        no_mcp23s08_warn = 0;
+        if (!mcp23s08_is_alive(MCP23S08_ctx)) {
+            printf("WARNING: no GPIO expander to control higher address\n\r");
+        }
+    }
     mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
@@ -563,7 +571,9 @@ void main(void) {
     //
     // Say Hello to SPI I/O expander MCP23S08
     //
-    mcp23s08_init(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_100KHZ, 0 /* address */);
+    if (mcp23s08_probe(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_100KHZ, 0 /* address */) == 0) {
+        printf("SuperMEZ80+SPI with GPIO expander\n\r");
+    }
     mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS0, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_CS1, 1);
