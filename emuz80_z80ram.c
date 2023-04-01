@@ -60,6 +60,13 @@
 #define MMU_SEG_SIZE     22     // MMU select segment size (in pages a 256 bytes)
 #define MMU_WR_PROT      23     // MMU write protect/unprotect common memory segment
 
+#define HW_CTRL          160    // hardware control
+#define HW_CTRL_LOCKED       0xff
+#define HW_CTRL_UNLOCKED     0x00
+#define HW_CTRL_MAGIC        0xaa
+#define HW_CTRL_RESET        (1 << 6)
+#define HW_CTRL_HALT         (1 << 7)
+
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
 #define NUM_FILES        8
@@ -134,6 +141,9 @@ unsigned int w;                 // 16 bits Address
 int mmu_bank = 0;
 uint32_t mmu_num_banks = 0;
 uint32_t mmu_mem_size = 0;
+
+// hardware control
+uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
 
 // UART3 Transmit
 void putch(char c) {
@@ -284,6 +294,29 @@ void mmu_bank_select(int bank)
     release_addrbus();  // set higher address pins
 }
 
+uint8_t hw_ctrl_read(void)
+{
+    return hw_ctrl_lock;
+}
+
+void hw_ctrl_write(uint8_t val)
+{
+    if (hw_ctrl_lock != HW_CTRL_UNLOCKED && val != HW_CTRL_MAGIC)
+        return;
+    if (val == HW_CTRL_MAGIC) {
+        hw_ctrl_lock = HW_CTRL_UNLOCKED;
+        return;
+    }
+    if (val & HW_CTRL_RESET) {
+        printf("\n\rReset by IO port %02XH\n\r", HW_CTRL);
+        RESET();
+    }
+    if (val & HW_CTRL_HALT) {
+        printf("\n\rHALT by IO port %02XH\n\r", HW_CTRL);
+        while (1);
+    }
+}
+
 // Never called, logically
 void __interrupt(irq(default),base(8)) Default_ISR(){}
 
@@ -323,6 +356,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     case DISK_REG_FDCST:
         LATC = disk_stat;
+        break;
+    case HW_CTRL:
+        LATC = hw_ctrl_read();
         break;
     default:
         #ifdef CPM_IO_DEBUG
@@ -401,6 +437,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     case MMU_BANK_SEL:
         mmu_bank_select(PORTC);
+        break;
+    case HW_CTRL:
+        hw_ctrl_write(PORTC);
         break;
     default:
         #ifdef CPM_IO_DEBUG
