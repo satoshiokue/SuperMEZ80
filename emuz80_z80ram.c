@@ -74,6 +74,8 @@
 // Z80 ROM equivalent, see end of this file
 extern const unsigned char rom[];
 static FATFS fs;
+static DIR fsdir;
+static FILINFO fileinfo;
 static FIL file;
 static uint8_t disk_buf[SECTOR_SIZE];
 
@@ -606,16 +608,64 @@ void main(void) {
         printf("Failed to mount SD Card.\n\r");
         while (1);
     }
+
+    //
+    // Select disk image folder
+    //
+    if (f_opendir(&fsdir, "/")  != FR_OK) {
+        printf("Failed to open SD Card..\n\r");
+        while (1);
+    }
+    i = 0;
+    int selection = -1;
+    while (f_readdir(&fsdir, &fileinfo) == FR_OK && fileinfo.fname[0] != 0) {
+        if (strncmp(fileinfo.fname, "CPMDISKS", 8) == 0 ||
+            strncmp(fileinfo.fname, "CPMDIS~", 7) == 0) {
+            printf("%d: %s\n\r", i, fileinfo.fname);
+            if (strcmp(fileinfo.fname, "CPMDISKS") == 0)
+                selection = i;
+            i++;
+        }
+    }
+    if (1 < i) {
+        printf("Select: ");
+        while (1) {
+            while (!U3RXIF);        // Wait for Rx interrupt flag set
+            char c = U3RXB;
+            if ('0' <= c && c <= '9' && c - '0' <= i) {
+                selection = c - '0';
+                break;
+            }
+            if ((c == 0x0d || c == 0x0a) && 0 <= selection)
+                break;
+        }
+        printf("%d\n\r", selection);
+        f_rewinddir(&fsdir);
+        i = 0;
+        while (f_readdir(&fsdir, &fileinfo) == FR_OK && fileinfo.fname[0] != 0) {
+            if (strncmp(fileinfo.fname, "CPMDISKS", 8) == 0 ||
+                strncmp(fileinfo.fname, "CPMDIS~", 7) == 0) {
+                if (selection == i)
+                    break;
+                i++;
+            }
+        }
+        printf("%s is selected.\n\r", fileinfo.fname);
+    } else {
+        strcpy(fileinfo.fname, "CPMDISKS");
+    }
+    f_closedir(&fsdir);
+
     //
     // Open disk images
     //
     for (unsigned int drive = 0; drive < NUM_DRIVES && num_files < NUM_FILES; drive++) {
         char drive_letter = 'A' + drive;
         char buf[22];
-        sprintf(buf, "CPMDISKS/DRIVE%c.DSK", drive_letter);
+        sprintf(buf, "%s/DRIVE%c.DSK", fileinfo.fname, drive_letter);
         if (f_open(&files[num_files], buf, FA_READ|FA_WRITE) == FR_OK) {
-            printf("Image file DRIVE%c.DSK is assigned to drive %c\n\r",
-                   drive_letter, drive_letter);
+            printf("Image file %s/DRIVE%c.DSK is assigned to drive %c\n\r",
+                   fileinfo.fname, drive_letter, drive_letter);
             drives[drive].filep = &files[num_files];
             num_files++;
         }
