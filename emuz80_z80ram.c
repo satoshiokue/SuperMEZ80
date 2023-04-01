@@ -156,66 +156,66 @@ void dma_write_to_sram(uint32_t dest, uint8_t *buf, int len)
     uint16_t second_half = 0;
     int i;
 
-    if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + SECTOR_SIZE)
-        second_half = (uint16_t)(((uint32_t)addr + SECTOR_SIZE) - ((uint32_t)LOW_ADDR_MASK + 1));
+    if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
+        second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
     acquire_addrbus(dest);
     TRISC = 0x00;       // Set as output to write to the SRAM
-    for(i = 0; i < SECTOR_SIZE - second_half; i++) {
+    for(i = 0; i < len - second_half; i++) {
         ab.w = addr;
         LATD = ab.h;
         LATB = ab.l;
         addr++;
         LATA2 = 0;      // activate /WE
-        LATC = disk_buf[i];
+        LATC = buf[i];
         LATA2 = 1;      // deactivate /WE
     }
 
     if (0 < second_half)
         acquire_addrbus(dest + i);
-    for( ; i < SECTOR_SIZE; i++) {
+    for( ; i < len; i++) {
         ab.w = addr;
         LATD = ab.h;
         LATB = ab.l;
         addr++;
         LATA2 = 0;      // activate /WE
-        LATC = disk_buf[i];
+        LATC = buf[i];
         LATA2 = 1;      // deactivate /WE
     }
 
     release_addrbus();
 }
 
-void dma_read_from_sram(uint32_t dest, uint8_t *buf, int len)
+void dma_read_from_sram(uint32_t src, uint8_t *buf, int len)
 {
-    uint16_t addr = (dest & LOW_ADDR_MASK);
+    uint16_t addr = (src & LOW_ADDR_MASK);
     uint16_t second_half = 0;
     int i;
 
-    if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + SECTOR_SIZE)
-        second_half = (uint16_t)(((uint32_t)addr + SECTOR_SIZE) - ((uint32_t)LOW_ADDR_MASK + 1));
+    if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
+        second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
-    acquire_addrbus(dest);
+    acquire_addrbus(src);
     TRISC = 0xff;       // Set as input to read from the SRAM
-    for(i = 0; i < SECTOR_SIZE - second_half; i++) {
+    for(i = 0; i < len - second_half; i++) {
         ab.w = addr;
         LATD = ab.h;
         LATB = ab.l;
         addr++;
         LATA4 = 0;      // activate /OE
-        disk_buf[i] = PORTC;
+        buf[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
 
     if (0 < second_half)
-        acquire_addrbus(dest + i);
-    for( ; i < SECTOR_SIZE; i++) {
+        acquire_addrbus(src + i);
+    for( ; i < len; i++) {
         ab.w = addr;
         LATD = ab.h;
         LATB = ab.l;
         addr++;
         LATA4 = 0;      // activate /OE
-        disk_buf[i] = PORTC;
+        buf[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
 
