@@ -125,7 +125,7 @@ void putch(char c) {
 
 void acquire_addrbus(uint32_t addr)
 {
-    static no_mcp23s08_warn = 1;
+    static int no_mcp23s08_warn = 1;
 
     if (no_mcp23s08_warn && (addr & HIGH_ADDR_MASK) != 0) {
         no_mcp23s08_warn = 0;
