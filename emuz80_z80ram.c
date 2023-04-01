@@ -203,8 +203,6 @@ void dma_read_from_sram(uint32_t dest, uint8_t *buf, int len)
         LATB = ab.l;
         addr++;
         LATA4 = 0;      // activate /OE
-        for (int j = 0; j < 50; j++)
-            asm("nop");
         disk_buf[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
@@ -217,8 +215,6 @@ void dma_read_from_sram(uint32_t dest, uint8_t *buf, int len)
         LATB = ab.l;
         addr++;
         LATA4 = 0;      // activate /OE
-        for (int j = 0; j < 50; j++)
-            asm("nop");
         disk_buf[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
