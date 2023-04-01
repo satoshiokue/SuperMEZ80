@@ -33,6 +33,7 @@
 //#define CPM_DISK_DEBUG
 //#define CPM_DISK_DEBUG_VERBOSE
 //#define CPM_MEM_DEBUG
+#define CPM_IO_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
 
@@ -263,6 +264,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         LATC = disk_stat;
         break;
     default:
+        #ifdef CPM_IO_DEBUG
+        printf("WARNING: unknown I/O read %d (%02XH)\n\r", ab.l, ab.l);
+        #endif
         LATC = 0xff;            // Invalid data
         break;
     }
@@ -330,6 +334,11 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     case DISK_REG_DMAH:
         disk_dmah = PORTC;
+        break;
+    default:
+        #ifdef CPM_IO_DEBUG
+        printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", ab.l, PORTC, ab.l, PORTC);
+        #endif
         break;
     }
     if (!do_disk_io) {
