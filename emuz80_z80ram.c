@@ -34,6 +34,7 @@
 //#define CPM_DISK_DEBUG_VERBOSE
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
+#define CPM_MMU_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
 
@@ -54,13 +55,21 @@
 #define DISK_REG_DMAL    15     // dma-port: dma address low
 #define DISK_REG_DMAH    16     // dma-port: dma address high
 
-#define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
-#define SPI_CLOCK_2MHZ 0        // Maximum speed w/o any wait (1~2 MHz)
-#define NUM_FILES 8
-#define SECTOR_SIZE 128
+#define MMU_INIT         20     // MMU initialisation
+#define MMU_BANK_SEL     21     // MMU bank select
+#define MMU_SEG_SIZE     22     // MMU select segment size (in pages a 256 bytes)
+#define MMU_WR_PROT      23     // MMU write protect/unprotect common memory segment
 
-#define HIGH_ADDR_MASK    0x0001c000
-#define LOW_ADDR_MASK     0x00003fff
+#define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
+#define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
+#define NUM_FILES        8
+#define SECTOR_SIZE      128
+#define TMP_BUF_SIZE     256
+
+#define MEM_CHECK_UNIT   TMP_BUF_SIZE * 16 // 2 KB
+#define MAX_MEM_SIZE     0x00100000        // 1 MB
+#define HIGH_ADDR_MASK   0x0001c000
+#define LOW_ADDR_MASK    0x00003fff
 
 #define GPIO_CS0    0
 #define GPIO_CS1    1
@@ -78,6 +87,7 @@ static DIR fsdir;
 static FILINFO fileinfo;
 static FIL file;
 static uint8_t disk_buf[SECTOR_SIZE];
+static uint8_t tmp_buf[2][TMP_BUF_SIZE];
 
 typedef struct {
     unsigned int sectors;
@@ -120,6 +130,11 @@ unsigned int w;                 // 16 bits Address
     };
 } ab;
 
+// MMU
+int mmu_bank = 0;
+uint32_t mmu_num_banks = 0;
+uint32_t mmu_mem_size = 0;
+
 // UART3 Transmit
 void putch(char c) {
     while(!U3TXIF);             // Wait or Tx interrupt flag set
@@ -150,7 +165,7 @@ void release_addrbus(void)
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
     // A16 must always be driven by MCP23S08
-    //mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_INPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A16, (mmu_bank & 1));
 }
 
 void dma_write_to_sram(uint32_t dest, uint8_t *buf, int len)
@@ -223,6 +238,50 @@ void dma_read_from_sram(uint32_t src, uint8_t *buf, int len)
     }
 
     release_addrbus();
+}
+
+void mmu_bank_config(int nbanks)
+{
+    #ifdef CPM_MMU_DEBUG
+    printf("mmu_bank_config: %d\n\r", nbanks);
+    #endif
+    if (mmu_num_banks < nbanks)
+        printf("WARNING: too many banks requested. (request is %d)\n\r", nbanks);
+}
+
+void mmu_bank_select(int bank)
+{
+    #ifdef CPM_MMU_DEBUG
+    printf("mmu_bank_select: %d\n\r", bank);
+    #endif
+    if (mmu_bank == bank)
+        return;
+    if (mmu_num_banks <= bank) {
+        printf("ERROR: bank %d is not available.\n\r", bank);
+        while (1);
+    }
+    uint32_t src = ((uint32_t)mmu_bank << 16) + 0xc000;
+    uint32_t dst = ((uint32_t)bank << 16) + 0xc000;
+    for (int offs = 0; offs < 1024 * 16; offs += TMP_BUF_SIZE) {
+        dma_read_from_sram(src + offs, tmp_buf[0], TMP_BUF_SIZE);
+        dma_write_to_sram(dst + offs, tmp_buf[0], TMP_BUF_SIZE);
+
+        // #ifdef CPM_MEM_DEBUG
+        #if 1
+        dma_read_from_sram(dst + offs, tmp_buf[1], TMP_BUF_SIZE);
+        for (int i = 0; i < TMP_BUF_SIZE; i++) {
+            if (tmp_buf[0][i] != tmp_buf[1][i]) {
+                printf("verify error at offset %04XH (copy from %06lXH to %06lXH)\n\r", offs,
+                       src + offs, dst + offs);
+                util_hexdump_sum(" write: ", tmp_buf[0], TMP_BUF_SIZE);
+                util_hexdump_sum("verify: ", tmp_buf[1], TMP_BUF_SIZE);
+                break;
+            }
+        }
+        #endif
+    }
+    mmu_bank = bank;
+    release_addrbus();  // set higher address pins
 }
 
 // Never called, logically
@@ -337,6 +396,12 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case DISK_REG_DMAH:
         disk_dmah = PORTC;
         break;
+    case MMU_INIT:
+        mmu_bank_config(PORTC);
+        break;
+    case MMU_BANK_SEL:
+        mmu_bank_select(PORTC);
+        break;
     default:
         #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", ab.l, PORTC, ab.l, PORTC);
@@ -405,13 +470,13 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             // DMA read
             //
             // transfer read data to SRAM
-            uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
+            uint32_t addr = ((uint32_t)mmu_bank << 16) | ((uint16_t)disk_dmah << 8) | disk_dmal;
             dma_write_to_sram(addr, disk_buf, SECTOR_SIZE);
             disk_datap = NULL;
 
             #ifdef CPM_MEM_DEBUG
             // read back the SRAM
-            uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
+            uint32_t addr = ((uint32_t)mmu_bank << 16) | ((uint16_t)disk_dmah << 8) | disk_dmal;
             printf("f_read(): SRAM address: %04x\n\r", addr);
             dma_read_from_sram(addr, disk_buf, SECTOR_SIZE);
             util_hexdump_sum("RAM: ", disk_buf, SECTOR_SIZE);
@@ -437,7 +502,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             // DMA write
             //
             // transfer write data from SRAM to the buffer
-            uint16_t addr = ((uint16_t)disk_dmah << 8) | disk_dmal;
+            uint32_t addr = ((uint32_t)mmu_bank << 16) | ((uint16_t)disk_dmah << 8) | disk_dmal;
             dma_read_from_sram(addr, disk_buf, SECTOR_SIZE);
         } else {
             //
@@ -592,6 +657,37 @@ void main(void) {
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
 
+    // RAM check
+    for (i = 0; i < TMP_BUF_SIZE; i += 2) {
+        tmp_buf[0][i + 0] = 0xa5;
+        tmp_buf[0][i + 1] = 0x5a;
+    }
+    uint32_t addr;
+    for (addr = 0; addr < MAX_MEM_SIZE; addr += MEM_CHECK_UNIT) {
+        printf("Memory 000000 - %06lXH\r", addr);
+        tmp_buf[0][0] = (addr >>  0) & 0xff;
+        tmp_buf[0][1] = (addr >>  8) & 0xff;
+        tmp_buf[0][2] = (addr >> 16) & 0xff;
+        dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE);
+        dma_read_from_sram(addr, tmp_buf[1], TMP_BUF_SIZE);
+        if (memcmp(tmp_buf[0], tmp_buf[1], TMP_BUF_SIZE) != 0) {
+            printf("\nMemory error at %06lXH\n\r", addr);
+            util_hexdump_sum(" write: ", tmp_buf[0], TMP_BUF_SIZE);
+            util_hexdump_sum("verify: ", tmp_buf[1], TMP_BUF_SIZE);
+            break;
+        }
+        if (addr == 0)
+            continue;
+        dma_read_from_sram(0, tmp_buf[1], TMP_BUF_SIZE);
+        if (memcmp(tmp_buf[0], tmp_buf[1], TMP_BUF_SIZE) == 0) {
+            // the page at addr is the same as the first page
+            break;
+        }
+    }
+    mmu_mem_size = addr;
+    mmu_num_banks = mmu_mem_size / 0x10000;
+    printf("Memory 000000 - %06lXH %d KB OK\r\n", addr, (int)(mmu_mem_size / 1024));
+
     //
     // Initialize SD Card
     //
@@ -679,6 +775,7 @@ void main(void) {
     // Transfer ROM image to the SRAM
     //
     acquire_addrbus(0x00000);
+    TRISC = 0x00;       // Set as output to write to the SRAM
     for(i = 0; i < sizeof(rom); i++) {
         ab.w = i;
         LATD = ab.h;
