@@ -23,18 +23,22 @@
 
 #include <xc.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ff.h>
 #include <SDCard.h>
 #include <SPI.h>
 #include <mcp23s08.h>
 #include <utils.h>
+#include <disas.h>
+#include <disas_z80.h>
 
 //#define CPM_DISK_DEBUG
 //#define CPM_DISK_DEBUG_VERBOSE
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
 #define CPM_MMU_DEBUG
+//#define CPM_MON_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
 
@@ -66,6 +70,9 @@
 #define HW_CTRL_MAGIC        0xaa
 #define HW_CTRL_RESET        (1 << 6)
 #define HW_CTRL_HALT         (1 << 7)
+
+#define MON_ENTER        170    // enter monitor mode
+#define MON_RESTORE      171    // clean up monitor mode
 
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
@@ -128,6 +135,11 @@ const unsigned char rom[] = {
 #include "ipl.inc"
 };
 
+const unsigned char mon[] = {
+// NMI monitor at 0x0000
+#include "nmimon.inc"
+};
+
 // Address Bus
 union {
 unsigned int w;                 // 16 bits Address
@@ -136,6 +148,20 @@ unsigned int w;                 // 16 bits Address
         unsigned char h;        // Address high
     };
 } ab;
+
+// Saved Z80 Context
+struct z80_context {
+    uint16_t pc;
+    uint16_t sp;
+    uint16_t af;
+    uint16_t bc;
+    uint16_t de;
+    uint16_t hl;
+    uint16_t ix;
+    uint16_t iy;
+    uint8_t saved_prog[2];
+} z80_context;
+int invoke_monitor = 0;
 
 // MMU
 int mmu_bank = 0;
@@ -149,6 +175,12 @@ uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
 void putch(char c) {
     while(!U3TXIF);             // Wait or Tx interrupt flag set
     U3TXB = c;                  // Write data
+}
+
+// UART3 Recive
+char getch(void) {
+    while(!U3RXIF);             // Wait for Rx interrupt flag set
+    return U3RXB;               // Read data
 }
 
 void acquire_addrbus(uint32_t addr)
@@ -178,7 +210,7 @@ void release_addrbus(void)
     mcp23s08_write(MCP23S08_ctx, GPIO_A16, (mmu_bank & 1));
 }
 
-void dma_write_to_sram(uint32_t dest, uint8_t *buf, int len)
+void dma_write_to_sram(uint32_t dest, void *buf, int len)
 {
     uint16_t addr = (dest & LOW_ADDR_MASK);
     uint16_t second_half = 0;
@@ -195,7 +227,7 @@ void dma_write_to_sram(uint32_t dest, uint8_t *buf, int len)
         LATB = ab.l;
         addr++;
         LATA2 = 0;      // activate /WE
-        LATC = buf[i];
+        LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
     }
 
@@ -207,14 +239,14 @@ void dma_write_to_sram(uint32_t dest, uint8_t *buf, int len)
         LATB = ab.l;
         addr++;
         LATA2 = 0;      // activate /WE
-        LATC = buf[i];
+        LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
     }
 
     release_addrbus();
 }
 
-void dma_read_from_sram(uint32_t src, uint8_t *buf, int len)
+void dma_read_from_sram(uint32_t src, void *buf, int len)
 {
     uint16_t addr = (src & LOW_ADDR_MASK);
     uint16_t second_half = 0;
@@ -231,7 +263,7 @@ void dma_read_from_sram(uint32_t src, uint8_t *buf, int len)
         LATB = ab.l;
         addr++;
         LATA4 = 0;      // activate /OE
-        buf[i] = PORTC;
+        ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
 
@@ -243,7 +275,7 @@ void dma_read_from_sram(uint32_t src, uint8_t *buf, int len)
         LATB = ab.l;
         addr++;
         LATA4 = 0;      // activate /OE
-        buf[i] = PORTC;
+        ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
 
@@ -317,6 +349,434 @@ void hw_ctrl_write(uint8_t val)
     }
 }
 
+uint16_t read_mcu_mem_w(void *addr)
+{
+    uint8_t *p = (uint8_t *)addr;
+    return ((p[1] << 8) + p[0]);
+}
+
+void write_mcu_mem_w(void *addr, uint16_t val)
+{
+    uint8_t *p = (uint8_t *)addr;
+    *p++ = ((val >> 0) & 0xff);
+    *p++ = ((val >> 8) & 0xff);
+}
+
+void mon_setup(void)
+{
+    dma_read_from_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
+    dma_write_to_sram((uint32_t)mmu_bank << 16, mon, sizeof(mon));
+    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 0);
+}
+
+void mon_enter(void)
+{
+    printf("\n\r");
+    #ifdef CPM_MON_DEBUG
+    printf("Enter monitor\n\r");
+    #endif
+
+    dma_read_from_sram((uint32_t)mmu_bank << 16, tmp_buf[0], sizeof(mon));
+    z80_context.sp = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 2]);
+    z80_context.af = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 4]);
+    z80_context.bc = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 6]);
+    z80_context.de = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 8]);
+    z80_context.hl = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 10]);
+    z80_context.ix = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 12]);
+    z80_context.iy = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 14]);
+
+    uint16_t sp = z80_context.sp;
+    dma_read_from_sram(((uint32_t)mmu_bank << 16) + (sp & ~0xf), tmp_buf[0], 16);
+    z80_context.pc = read_mcu_mem_w(&tmp_buf[0][sp & 0xf]);
+}
+
+void edit_line(char *line, int maxlen, int start, int pos)
+{
+    int refresh = 1;
+    if (maxlen <= strlen(line))
+        line[maxlen - 1] = '\0';
+    while (1) {
+        if (pos < start) {
+            refresh = 1;
+            pos = start;
+        } else
+        if (maxlen - 1 <= pos) {
+            refresh = 1;
+            pos = maxlen - 2;
+            line[maxlen - 1] = '\0';
+        } else
+        if (strlen(line) < pos) {
+            refresh = 1;
+            pos = strlen(line);
+        }
+
+        if (refresh) {
+            printf("\r%s \r", line);
+            for (int i = 0; i < pos; i++)
+                printf("%c", line[i]);
+        } else {
+            printf("%c", line[pos - 1]);
+        }
+
+        int c = getch();
+        refresh = 1;
+        switch (c) {
+        case 0x01:
+            pos = start;
+            continue;
+        case 0x02:
+            pos--;
+            continue;
+        case 0x05:
+            pos = strlen(line);
+            continue;
+        case 0x06:
+            pos++;
+            continue;
+        case 0x08:
+            if (pos <= start)
+                continue;
+            for (int i = pos; i <= maxlen - 1; i++) {
+                line[i - 1] = line[i];
+            }
+            pos--;
+            continue;
+        case 0x0a:
+        case 0x0d:
+            return;
+        case 0x11:
+            line[pos] = '\0';
+            printf("\r%s", line);
+            for (int i = pos; i < maxlen; i++) {
+                printf(" ");
+            }
+            continue;
+        }
+        if (32 <= c && c <= 126) {
+            if (line[pos] == '\0' && pos < maxlen - 1) {
+                refresh = 0;
+                line[pos + 1] = '\0';
+            } else {
+                for (int i = maxlen - 2; pos <= i; i--) {
+                    line[i + 1] = line[i];
+                }
+            }
+            line[pos++] = c;
+        } else {
+            printf("<%d>\n\r", c);
+        }
+    }
+}
+
+#define MON_MAX_ARGS 2
+static const struct {
+    uint8_t command;
+    const char *name;
+    uint8_t nargs;
+} mon_cmds[] = {
+    { 'c', "continue",      0 },
+    { 'd', "disassemble",   2 },
+    { 'x', "dump",          2 },
+    { 'r', "reset",         0 },
+    { 's', "status",        0 },
+    { 'h', "help",          0 },
+};
+uint32_t mon_cur_addr = 0;
+
+void mon_help(void)
+{
+    for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
+        printf("%s\n\r", mon_cmds[cmd_idx].name);
+    }
+}
+
+void mon_remove_space(char **linep)
+{
+    while (**linep == ' ')  // Remove reading white space characters
+        (*linep)++;
+}
+
+int mon_get_hexval(char **linep)
+{
+    int result = 0;
+    mon_remove_space(linep);
+
+    while (1) {
+        char c = **linep;
+        if ('a' <= c && c <= 'f')
+            c -= ('a' - 'A');
+        if ((c < '0' || '9' < c) && (c < 'A' || 'F' < c))
+            break;
+        result++;
+        (*linep)++;
+    }
+    mon_remove_space(linep);
+
+    return result;
+}
+
+int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
+{
+    int nmatches = 0;
+    int match_idx;
+    static int last_command = -1;
+
+    for (int i = 0; i < MON_MAX_ARGS; i++)
+        args[i] = NULL;
+
+    mon_remove_space(&line);
+    if (*line == '\0' && 0 < last_command) {
+        *command = last_command;
+        return 0;
+    }
+    last_command = -1;
+
+    // Search command in the command table
+    for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
+        int i;
+        for (i = 0; line[i] && line[i] != ' '; i++) {
+            if (line[i] <= 'z' && line[i] != mon_cmds[cmd_idx].name[i] &&
+                line[i] - ('A' - 'a') != mon_cmds[cmd_idx].name[i]) {
+                break;
+            }
+        }
+        if (line[i] == '\0' || line[i] == ' ') {
+            nmatches++;
+            match_idx = cmd_idx;
+        }
+    }
+    if (nmatches < 1){
+        // Unknown command
+        #ifdef CPM_MON_DEBUG
+        printf("not match: %s\n\r", line);
+        #endif
+        return 1;
+    }
+    if (1 < nmatches){
+        // Ambiguous command
+        #ifdef CPM_MON_DEBUG
+        printf("Ambiguous command %s\n\r", line);
+        #endif
+        return 2;
+    }
+    // Read command name
+    while (*line != '\0' && *line != ' ')
+        line++;
+    mon_remove_space(&line);
+
+    // Read command arguments
+    for (int i = 0; i < mon_cmds[match_idx].nargs; i++) {
+        args[i] = line;
+        if (mon_get_hexval(&line) == 0 && *line == '\0') {
+            // reach end of the line without any argument
+            args[i] = NULL;
+            break;
+        }
+        if (*line == ',') {
+            // terminate arg[i] and go next argument
+            (*line++) = '\0';
+            continue;
+        }
+    }
+    if (*line != '\0') {
+        // Some garbage found
+        #ifdef CPM_MON_DEBUG
+        printf("Trailing garbage found: '%s'\n\r", line);
+        #endif
+        return 3;
+    }
+
+    *command = mon_cmds[match_idx].command;
+    last_command = mon_cmds[match_idx].command;
+    return 0;
+}
+
+void mon_dump(char *args[])
+{
+    uint32_t addr = mon_cur_addr;
+    unsigned int len = 64;
+
+    if (args[0] != NULL && *args[0] != '\0')
+        addr = strtoul(args[0], NULL, 16);
+    if (args[1] != NULL && *args[1] != '\0')
+        len = strtoul(args[1], NULL, 16);
+
+    if (addr & 0xf) {
+        len += (addr & 0xf);
+        addr &= ~0xf;
+    }
+    if (len & 0xf) {
+        len += (16 - (len & 0xf));
+    }
+
+    while (0 < len) {
+        unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0]));
+        dma_read_from_sram(((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n);
+        util_addrdump("", ((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n);
+        len -= n;
+        addr += n;
+    }
+    mon_cur_addr = addr;
+}
+
+void mon_disas(char *args[])
+{
+    uint32_t addr = mon_cur_addr;
+    unsigned int len = 32;
+
+    if (args[0] != NULL && *args[0] != '\0')
+        addr = strtoul(args[0], NULL, 16);
+    if (args[1] != NULL && *args[1] != '\0')
+        len = strtoul(args[1], NULL, 16);
+
+    int leftovers = 0;
+    while (leftovers < len) {
+        unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0])) - leftovers;
+        dma_read_from_sram(((uint32_t)mmu_bank << 16) + addr, &tmp_buf[0][leftovers], n);
+        n += leftovers;
+        int done = disas_ops(disas_z80, ((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n, n, NULL);
+        leftovers = n - done;
+        len -= done;
+        addr += done;
+        #ifdef CPM_MON_DEBUG
+        printf("addr=%lx, done=%d, len=%d, n=%d, leftover=%d\n\r", addr, done, len, n, leftovers);
+        #endif
+        for (int i = 0; i < leftovers; i++)
+            tmp_buf[0][i] = tmp_buf[0][sizeof(tmp_buf[0]) - leftovers + i];
+    }
+    mon_cur_addr = addr;
+
+    #ifdef CPM_MON_DEBUG
+    printf("mon_cur_addr=%lx\n\r", mon_cur_addr);
+    #endif
+}
+
+void mon_status(void)
+{
+    uint16_t sp = z80_context.sp;
+    uint16_t pc = z80_context.pc;
+
+    printf("PC: %04X  ", z80_context.pc);
+    printf("SP: %04X  ", z80_context.sp);
+    printf("AF: %04X  ", z80_context.af);
+    printf("BC: %04X\n\r", z80_context.bc);
+    printf("DE: %04X  ", z80_context.de);
+    printf("HL: %04X  ", z80_context.hl);
+    printf("IX: %04X  ", z80_context.ix);
+    printf("IY: %04X\n\r", z80_context.iy);
+
+    printf("\n\r");
+    printf("stack:\n\r");
+    dma_read_from_sram(((uint32_t)mmu_bank << 16) + (sp & ~0xf), tmp_buf[0], 64);
+    util_addrdump("", ((uint32_t)mmu_bank << 16) + (sp & ~0xf), tmp_buf[0], 64);
+
+    printf("\n\r");
+    printf("program:\n\r");
+    dma_read_from_sram(((uint32_t)mmu_bank << 16) + (pc & ~0xf), tmp_buf[0], 64);
+    util_addrdump("", ((uint32_t)mmu_bank << 16) + (pc & ~0xf), tmp_buf[0], 64);
+
+    printf("\n\r");
+    disas_ops(disas_z80, ((uint32_t)mmu_bank << 16) + pc, &tmp_buf[0][pc & 0xf], 16, 16, NULL);
+}
+
+int mon_prompt(void)
+{
+    char line[32];
+    char *args[MON_MAX_ARGS];
+    const char *prompt = "MON>";
+    const int prompt_len = strlen(prompt);
+    char* input = &line[prompt_len];
+
+    sprintf(line, prompt);
+    edit_line(line, sizeof(line), prompt_len, prompt_len);
+    printf("\n\r");
+
+    #ifdef CPM_MON_DEBUG
+    util_hexdump("edit_line: ", line, sizeof(line));
+    printf("command: %s\n\r", input);
+    #endif
+
+    uint8_t command;
+    uint16_t arg1;
+    uint16_t arg2;
+
+    if (mon_parse(input, &command, args)) {
+        printf("unknown command: %s\n\r", input);
+        mon_help();
+        return 0;
+    }
+
+    #ifdef CPM_MON_DEBUG
+    printf("command: %c", command);
+    for (int i = 0; i < MON_MAX_ARGS; i++) {
+        if (args[i])
+            printf("  '%s'", args[i]);
+        else
+            printf("  null");
+    }
+    printf("\n\r");
+    #endif
+
+    switch (command) {
+    case 'c':
+        return 1;
+    case 'd':
+        mon_disas(args);
+        break;
+    case 'r':
+        RESET();
+        // no return
+    case 's':
+        mon_status();
+        break;
+    case 'x':
+        mon_dump(args);
+        break;
+    case 'h':
+        mon_help();
+        break;
+    }
+
+    return 0;
+}
+
+void mon_leave(void)
+{
+    // printf("Leave monitor\n\r");
+
+    uint16_t pc = z80_context.pc;
+    uint16_t sp = z80_context.sp;
+    const unsigned int size = sizeof(z80_context.saved_prog);
+
+    // Rewind PC on the NMI stack by 2 byes
+    pc -= size;
+    write_mcu_mem_w(tmp_buf[0], pc);
+    dma_write_to_sram(((uint32_t)mmu_bank << 16) + sp, tmp_buf[0], 2);
+
+    // Save original program
+    dma_read_from_sram(((uint32_t)mmu_bank << 16) + pc, &z80_context.saved_prog, size);
+
+    // Insert 'OUT (MON_RESTORE), A'
+    memset(tmp_buf[0], 0, size);  // Fill with NOP
+    tmp_buf[0][0] = 0xd3;
+    tmp_buf[0][1] = MON_RESTORE;
+    dma_write_to_sram(((uint32_t)mmu_bank << 16) + pc, tmp_buf[0], size);
+
+    // Clear NMI
+    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
+}
+
+void mon_restore(void)
+{
+    // printf("\n\rCleanup monitor\n\r");
+
+    // Restore original program
+    const unsigned int size = sizeof(z80_context.saved_prog);
+    uint16_t pc = z80_context.pc - size;
+    dma_write_to_sram(((uint32_t)mmu_bank << 16) + pc, &z80_context.saved_prog, size);
+    dma_write_to_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
+}
+
 // Never called, logically
 void __interrupt(irq(default),base(8)) Default_ISR(){}
 
@@ -341,8 +801,13 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         LATC = PIR9;            // Out PIR9
         break;
     case UART_DREG:
-        while (!U3RXIF);        // Wait for Rx interrupt flag set
-        LATC = U3RXB;           // Out U3RXB
+        {
+            uint8_t c = getch();
+            if (c == 0x00) {
+                invoke_monitor = 1;
+            }
+            LATC = c;           // Out the character
+        }
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
@@ -385,8 +850,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
     // Z80 IO write cycle
-    int do_disk_io = 0;
+    int do_bus_master = 0;
     int led_on = 0;
+    int io_addr = ab.l;
+    int io_data = PORTC;
     switch (ab.l) {
     case UART_DREG:
         while(!U3TXIF);
@@ -396,7 +863,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
             *disk_datap++ = PORTC;
             if (DISK_OP_WRITE == DISK_OP_WRITE && (disk_datap - disk_buf) == SECTOR_SIZE) {
-                do_disk_io = 1;
+                do_bus_master = 1;
             }
         } else {
             #ifdef CPM_DISK_DEBUG
@@ -419,7 +886,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         if (disk_op == DISK_OP_WRITE) {
             disk_datap = disk_buf;
         } else {
-            do_disk_io = 1;
+            do_bus_master = 1;
         }
         #ifdef CPM_DISK_DEBUG_VERBOSE
         printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ...\n\r", disk_op,
@@ -441,13 +908,17 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case HW_CTRL:
         hw_ctrl_write(PORTC);
         break;
+    case MON_ENTER:
+    case MON_RESTORE:
+        do_bus_master = 1;
+        break;
     default:
         #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", ab.l, PORTC, ab.l, PORTC);
         #endif
         break;
     }
-    if (!do_disk_io) {
+    if (!do_bus_master && !invoke_monitor) {
         // Release wait (D-FF reset)
         G3POL = 1;
         G3POL = 0;
@@ -466,6 +937,23 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     G3POL = 1;          // Release wait (D-FF reset)
     G3POL = 0;
+
+    if (invoke_monitor) {
+        invoke_monitor = 0;
+        mon_setup();
+        goto io_exit;
+    }
+
+    switch (io_addr) {
+    case MON_ENTER:
+        mon_enter();
+        while (!mon_prompt());
+        mon_leave();
+        goto io_exit;
+    case MON_RESTORE:
+        mon_restore();
+        goto io_exit;
+    }
 
     // turn on the LED
     led_on = 1;
@@ -575,6 +1063,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     if (led_on)  // turn off the LED
         mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
 
+ io_exit:
     // Set address bus as input
     TRISD = 0x7f;           // A15-A8 pin (A14:/RFSH, A15:/WAIT)
     TRISB = 0xff;           // A7-A0 pin
@@ -765,8 +1254,7 @@ void main(void) {
     if (1 < i) {
         printf("Select: ");
         while (1) {
-            while (!U3RXIF);        // Wait for Rx interrupt flag set
-            char c = U3RXB;
+            char c = getch();       // Wait for input char
             if ('0' <= c && c <= '9' && c - '0' <= i) {
                 selection = c - '0';
                 break;
