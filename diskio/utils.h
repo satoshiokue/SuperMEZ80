@@ -24,6 +24,9 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
+#define UTIL_MIN(a, b) ((a) < (b) ? (a) : (b))
+#define UTIL_MAX(a, b) ((a) > (b) ? (a) : (b))
+
 void util_hexdump(const char *header, void *addr, int size);
 void util_hexdump_sum(const char *header, void *addr, int size);
 void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size);
