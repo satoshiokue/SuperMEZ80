@@ -93,4 +93,4 @@ https://store.shopping.yahoo.co.jp/orangepicoshop/pico-a-051.html
 ## 改訂
 Version 0.2 2023/4/19  
 起動時にFirmwareの対象基板(MEZ80RAM)とクロック周波数を表示  
-GPIO RD6をROMデータ転送後に出力に変更
+初期化中にZ80の/RFSHと衝突していたGPIO RD6を入力に変更
