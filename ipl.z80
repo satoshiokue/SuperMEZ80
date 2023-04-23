@@ -38,7 +38,7 @@ DMAH    EQU	16		;dma-port: dma address high
 ;
 BOOT:
 	JP	COLD
-        DEFS	128 - 3, 0
+        DEFS	128 - $, 0
 ;
 ERRMSG:	DEFM	'BOOT: error booting'
 	DEFB	13,10,0
