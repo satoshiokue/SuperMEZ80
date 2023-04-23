@@ -243,8 +243,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         goto disk_io_done;
     }
 
-    // Set address bus as output
-    TRISD = 0x00;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
+    // Set address bus as output (except /RFSH)
+    TRISD = 0x40;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
     TRISB = 0x00;       // A7-A0
 
     uint32_t sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
@@ -407,7 +407,7 @@ void main(void) {
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
     ANSELD = 0x00;      // Disable analog function
     LATD = 0x00;
-    TRISD = 0x00;       // Set as output
+    TRISD = 0x40;       // Set as output except /RFSH
 
     // SPI /CS (RE2) output pin
     ANSELE2 = 0;        // Disable analog function
