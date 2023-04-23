@@ -37,7 +37,7 @@
 //#define CPM_DISK_DEBUG_VERBOSE
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
-#define CPM_MMU_DEBUG
+//#define CPM_MMU_DEBUG
 //#define CPM_MON_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
@@ -82,17 +82,17 @@
 
 #define MEM_CHECK_UNIT   TMP_BUF_SIZE * 16 // 2 KB
 #define MAX_MEM_SIZE     0x00100000        // 1 MB
-#define HIGH_ADDR_MASK   0x0001c000
+#define HIGH_ADDR_MASK   0xffffc000
 #define LOW_ADDR_MASK    0x00003fff
 
 #define GPIO_CS0    0
 #define GPIO_CS1    1
-#define GPIO_LED    2
-#define GPIO_INT    3
+#define GPIO_BANK1  2
+#define GPIO_BANK2  3
 #define GPIO_NMI    4
 #define GPIO_A14    5
 #define GPIO_A15    6
-#define GPIO_A16    7
+#define GPIO_BANK0  7
 
 // Z80 ROM equivalent, see end of this file
 extern const unsigned char rom[];
@@ -197,8 +197,18 @@ void acquire_addrbus(uint32_t addr)
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
-    mcp23s08_write(MCP23S08_ctx, GPIO_A16, ((addr >> 16) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A16, MCP23S08_PINMODE_OUTPUT);
+    #ifdef GPIO_BANK0
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, ((addr >> 16) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK0, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_BANK1
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, ((addr >> 17) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK1, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_BANK2
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, ((addr >> 18) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
+    #endif
 }
 
 void release_addrbus(void)
@@ -206,8 +216,16 @@ void release_addrbus(void)
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
-    // A16 must always be driven by MCP23S08
-    mcp23s08_write(MCP23S08_ctx, GPIO_A16, (mmu_bank & 1));
+    // higher address lines must always be driven by MCP23S08
+    #ifdef GPIO_BANK0
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, ((mmu_bank >> 0) & 1));
+    #endif
+    #ifdef GPIO_BANK1
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, ((mmu_bank >> 1) & 1));
+    #endif
+    #ifdef GPIO_BANK2
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, ((mmu_bank >> 2) & 1));
+    #endif
 }
 
 void dma_write_to_sram(uint32_t dest, void *buf, int len)
@@ -301,26 +319,6 @@ void mmu_bank_select(int bank)
     if (mmu_num_banks <= bank) {
         printf("ERROR: bank %d is not available.\n\r", bank);
         while (1);
-    }
-    uint32_t src = ((uint32_t)mmu_bank << 16) + 0xc000;
-    uint32_t dst = ((uint32_t)bank << 16) + 0xc000;
-    for (int offs = 0; offs < 1024 * 16; offs += TMP_BUF_SIZE) {
-        dma_read_from_sram(src + offs, tmp_buf[0], TMP_BUF_SIZE);
-        dma_write_to_sram(dst + offs, tmp_buf[0], TMP_BUF_SIZE);
-
-        // #ifdef CPM_MEM_DEBUG
-        #if 1
-        dma_read_from_sram(dst + offs, tmp_buf[1], TMP_BUF_SIZE);
-        for (int i = 0; i < TMP_BUF_SIZE; i++) {
-            if (tmp_buf[0][i] != tmp_buf[1][i]) {
-                printf("verify error at offset %04XH (copy from %06lXH to %06lXH)\n\r", offs,
-                       src + offs, dst + offs);
-                util_hexdump_sum(" write: ", tmp_buf[0], TMP_BUF_SIZE);
-                util_hexdump_sum("verify: ", tmp_buf[1], TMP_BUF_SIZE);
-                break;
-            }
-        }
-        #endif
     }
     mmu_bank = bank;
     release_addrbus();  // set higher address pins
@@ -957,7 +955,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     // turn on the LED
     led_on = 1;
+    #ifdef GPIO_LED
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, 0);
+    #endif
 
     if (NUM_DRIVES <= disk_drive || drives[disk_drive].filep == NULL) {
         disk_stat = DISK_ST_ERROR;
@@ -1060,8 +1060,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
            disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, disk_stat);
     #endif
 
+    #ifdef GPIO_LED
     if (led_on)  // turn off the LED
         mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
+    #endif
 
  io_exit:
     // Set address bus as input
@@ -1178,12 +1180,28 @@ void main(void) {
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS0, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_CS1, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS1, MCP23S08_PINMODE_OUTPUT);
+    #ifdef GPIO_LED
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_LED, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_INT
     mcp23s08_write(MCP23S08_ctx, GPIO_INT, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_INT, MCP23S08_PINMODE_OUTPUT);
+    #endif
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
+    #ifdef GPIO_BANK0
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK0, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_BANK1
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK1, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_BANK2
+    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
+    #endif
 
     // RAM check
     for (i = 0; i < TMP_BUF_SIZE; i += 2) {
@@ -1213,6 +1231,40 @@ void main(void) {
         }
     }
     mmu_mem_size = addr;
+    #ifdef CPM_MMU_DEBUG
+    for (addr = 0; addr < mmu_mem_size; addr += MEM_CHECK_UNIT) {
+        printf("Memory 000000 - %06lXH\r", addr);
+        if (addr == 0 || (addr & 0xc000))
+            continue;
+        tmp_buf[0][0] = (addr >>  0) & 0xff;
+        tmp_buf[0][1] = (addr >>  8) & 0xff;
+        tmp_buf[0][2] = (addr >> 16) & 0xff;
+        //dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE);
+        dma_read_from_sram(addr, tmp_buf[1], TMP_BUF_SIZE);
+        if (memcmp(tmp_buf[0], tmp_buf[1], TMP_BUF_SIZE) != 0) {
+            printf("\nMemory error at %06lXH\n\r", addr);
+            util_hexdump_sum(" canon: ", tmp_buf[0], TMP_BUF_SIZE);
+            util_hexdump_sum("  read: ", tmp_buf[1], TMP_BUF_SIZE);
+            while (1);
+        }
+    }
+    for (i = 0; i < TMP_BUF_SIZE; i++)
+        tmp_buf[1][i] = TMP_BUF_SIZE - i;
+    for (addr = 0x0c000; addr < 0x10000; addr += TMP_BUF_SIZE) {
+        for (i = 0; i < TMP_BUF_SIZE; i++)
+            tmp_buf[0][i] = i;
+        dma_write_to_sram(0x0c000, tmp_buf[0], TMP_BUF_SIZE);
+        dma_write_to_sram(0x1c000, tmp_buf[1], TMP_BUF_SIZE);
+        dma_read_from_sram(0x0c000, tmp_buf[0], TMP_BUF_SIZE);
+        if (memcmp(tmp_buf[0], tmp_buf[1], TMP_BUF_SIZE) != 0) {
+            printf("\nMemory error at %06lXH\n\r", addr);
+            util_hexdump_sum("expect: ", tmp_buf[1], TMP_BUF_SIZE);
+            util_hexdump_sum("  read: ", tmp_buf[0], TMP_BUF_SIZE);
+            while (1);
+        }
+    }
+    #endif  // CPM_MMU_DEBUG
+
     mmu_num_banks = mmu_mem_size / 0x10000;
     printf("Memory 000000 - %06lXH %d KB OK\r\n", addr, (int)(mmu_mem_size / 1024));
 
