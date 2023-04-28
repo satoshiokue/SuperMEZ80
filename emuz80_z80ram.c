@@ -171,6 +171,11 @@ uint32_t mmu_mem_size = 0;
 // hardware control
 uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
 
+// key input buffer
+char key_input_buffer[8];
+unsigned int key_input = 0;
+unsigned int key_input_buffer_head = 0;
+
 // UART3 Transmit
 void putch(char c) {
     while(!U3TXIF);             // Wait or Tx interrupt flag set
@@ -179,8 +184,53 @@ void putch(char c) {
 
 // UART3 Recive
 char getch(void) {
-    while(!U3RXIF);             // Wait for Rx interrupt flag set
-    return U3RXB;               // Read data
+    char res;
+    while (1) {
+        if (0 < key_input) {
+            res = key_input_buffer[key_input_buffer_head];
+            key_input_buffer_head = ((key_input_buffer_head + 1) % sizeof(key_input_buffer));
+            key_input--;
+            U3RXIE = 1;         // Receiver interrupt enable
+            break;
+        }
+        if (U3RXIF) {           // Wait for Rx interrupt flag set
+            res = U3RXB;        // Read data
+            break;
+        }
+    }
+    return res;
+}
+
+void ungetch(char c) {
+    if ((sizeof(key_input_buffer) * 4 / 5) <= key_input) {
+        // Disable key input interrupt if key buffer is full
+        U3RXIE = 0;
+        return;
+    }
+    key_input_buffer[(key_input_buffer_head + key_input) % sizeof(key_input_buffer)] = c;
+    key_input++;
+}
+
+void bus_master(int enable)
+{
+    if (enable) {
+        RA4PPS = 0x00;      // unbind CLC1 and /OE (RA4)
+        RA2PPS = 0x00;      // unbind CLC2 and /WE (RA2)
+        LATA4 = 1;          // deactivate /OE
+        LATA2 = 1;          // deactivate /WE
+
+        // Set address bus as output (except /RFSH)
+        TRISD = 0x40;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
+        TRISB = 0x00;       // A7-A0
+    } else {
+        // Set address bus as input
+        TRISD = 0x7f;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
+        TRISB = 0xff;       // A7-A0 pin
+        TRISC = 0xff;       // D7-D0 pin
+
+        RA4PPS = 0x01;      // CLC1 -> RA4 -> /OE
+        RA2PPS = 0x02;      // CLC2 -> RA2 -> /WE
+    }
 }
 
 void acquire_addrbus(uint32_t addr)
@@ -775,8 +825,55 @@ void mon_restore(void)
     dma_write_to_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
 }
 
-// Never called, logically
-void __interrupt(irq(default),base(8)) Default_ISR(){}
+// Called at UART3 receiving some data
+void __interrupt(irq(default),base(8)) Default_ISR(){
+    GIE = 0;                    // Disable interrupt
+
+    // Read UART input if Rx interrupt flag is set
+    if (U3RXIF) {
+        uint8_t c = U3RXB;
+        if (c != 0x00) {        // Save input key to the buffer if the input is not a break key
+            ungetch(c);
+            goto enable_interupt_return;
+        }
+
+        // Break key was received.
+        // Attempts to become a bassmaster.
+        #ifdef CPM_MON_DEBUG
+        printf("\n\rAttempts to become a bassmaster ...\n\r");
+        #endif
+
+        if (CLC3IF) {           // Check /IORQ
+            #ifdef CPM_MON_DEBUG
+            printf("/IORQ is active\n\r");
+            #endif
+            // Let I/O handler to handle the break key if /IORQ is detected if /IORQ is detected
+            invoke_monitor = 1;
+            goto enable_interupt_return;
+        }
+
+        LATE0 = 0;              // set /BUSREQ to active
+        __delay_us(20);         // Wait a while for Z80 to release the bus
+        if (CLC3IF) {           // Check /IORQ again
+            // Withdraw /BUSREQ and let I/O handler to handle the break key if /IORQ is detected
+            // if /IORQ is detected
+            LATE0 = 1;
+            invoke_monitor = 1;
+            #ifdef CPM_MON_DEBUG
+            printf("Withdraw /BUSREQ because /IORQ is active\n\r");
+            #endif
+            goto enable_interupt_return;
+        }
+
+        bus_master(1);
+        mon_setup();            // Hook NMI handler and assert /NMI
+        bus_master(0);
+        LATE0 = 1;              // Clear /BUSREQ so that the Z80 can handle NMI
+    }
+
+ enable_interupt_return:
+    GIE = 1;                    // Enable interrupt
+}
 
 // Called at WAIT falling edge(Immediately after Z80 IORQ falling)
 void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
@@ -788,6 +885,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     static uint8_t disk_dmah = 0;
     static uint8_t disk_stat = DISK_ST_ERROR;
     static uint8_t *disk_datap = NULL;
+    uint8_t c;
+
+    GIE = 0;                    // Disable interrupt
 
     ab.l = PORTB;               // Read address low
 
@@ -796,16 +896,18 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     TRISC = 0x00;               // Set as output
     switch (ab.l) {
     case UART_CREG:
-        LATC = PIR9;            // Out PIR9
+        if (key_input) {
+            LATC = 0xff;        // input available
+        } else {
+            LATC = 0x00;        // no input available
+        }
         break;
     case UART_DREG:
-        {
-            uint8_t c = getch();
-            if (c == 0x00) {
-                invoke_monitor = 1;
-            }
-            LATC = c;           // Out the character
+        c = getch();
+        if (c == 0x00) {
+            invoke_monitor = 1;
         }
+        LATC = c;               // Out the character
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
@@ -826,6 +928,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     default:
         #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O read %d (%02XH)\n\r", ab.l, ab.l);
+        invoke_monitor = 1;
         #endif
         LATC = 0xff;            // Invalid data
         break;
@@ -844,6 +947,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     TRISC = 0xff;               // Set as input
     CLC3IF = 0;                 // Clear interrupt flag
 
+    GIE = 1;                    // Enable interrupt
     return;
     }
 
@@ -913,6 +1017,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     default:
         #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", ab.l, PORTC, ab.l, PORTC);
+        invoke_monitor = 1;
         #endif
         break;
     }
@@ -921,24 +1026,20 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         G3POL = 1;
         G3POL = 0;
         CLC3IF = 0;         // Clear interrupt flag
+        GIE = 1;            // Enable interrupt
         return;
     }
 
     //
-    // Do disk I/O
+    // Do something as the bus master
     //
     LATE0 = 0;          // /BUSREQ is active
-    RA4PPS = 0x00;      // unbind CLC1 and /OE (RA4)
-    RA2PPS = 0x00;      // unbind CLC2 and /WE (RA2)
-    LATA4 = 1;          // deactivate /OE
-    LATA2 = 1;          // deactivate /WE
-
     G3POL = 1;          // Release wait (D-FF reset)
     G3POL = 0;
 
-    if (invoke_monitor) {
-        invoke_monitor = 0;
-        mon_setup();
+    bus_master(1);
+
+    if (!do_bus_master) {
         goto io_exit;
     }
 
@@ -953,6 +1054,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         goto io_exit;
     }
 
+    //
+    // Do disk I/O
+    //
+
     // turn on the LED
     led_on = 1;
     #ifdef GPIO_LED
@@ -963,10 +1068,6 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
-
-    // Set address bus as output (except /RFSH)
-    TRISD = 0x40;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
-    TRISB = 0x00;       // A7-A0
 
     uint32_t sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
     FIL *filep = drives[disk_drive].filep;
@@ -1066,17 +1167,16 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     #endif
 
  io_exit:
-    // Set address bus as input
-    TRISD = 0x7f;           // A15-A8 pin (A14:/RFSH, A15:/WAIT)
-    TRISB = 0xff;           // A7-A0 pin
-    TRISC = 0xff;           // D7-D0 pin
+    if (invoke_monitor) {
+        invoke_monitor = 0;
+        mon_setup();
+    }
 
-    RA4PPS = 0x01;          // CLC1 -> RA4 -> /OE
-    RA2PPS = 0x02;          // CLC2 -> RA2 -> /WE
-
+    bus_master(0);
     LATE0 = 1;              // /BUSREQ is deactive
 
     CLC3IF = 0;             // Clear interrupt flag
+    GIE = 1;                // Enable interrupt
 }
 
 // main routine
@@ -1488,6 +1588,7 @@ void main(void) {
     CLC3IE = 1;          // Enabling CLC3 interrupt
 
     // Z80 start
+    U3RXIE = 1;          // Receiver interrupt enable
     GIE = 1;             // Global interrupt enable
     LATE0 = 1;           // /BUSREQ=1
     LATE1 = 1;           // Release reset
