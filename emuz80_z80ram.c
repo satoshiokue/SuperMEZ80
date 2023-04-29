@@ -73,6 +73,7 @@
 
 #define MON_ENTER        170    // enter monitor mode
 #define MON_RESTORE      171    // clean up monitor mode
+#define MON_BREAK        172    // hit break point
 
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
@@ -140,6 +141,11 @@ const unsigned char mon[] = {
 #include "nmimon.inc"
 };
 
+const unsigned char mon_rstmon[] = {
+// break point interrupt entry at 0x0008
+#include "rstmon.inc"
+};
+
 // Address Bus
 union {
 unsigned int w;                 // 16 bits Address
@@ -160,8 +166,13 @@ struct z80_context {
     uint16_t ix;
     uint16_t iy;
     uint8_t saved_prog[2];
+    uint8_t nmi;
 } z80_context;
+uint32_t mon_cur_addr = 0;
 int invoke_monitor = 0;
+uint32_t mon_bp_addr;
+uint8_t mon_bp_installed = 0;
+uint8_t mon_bp_saved_inst;
 
 // MMU
 int mmu_bank = 0;
@@ -417,25 +428,41 @@ void mon_setup(void)
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 0);
 }
 
-void mon_enter(void)
+void mon_enter(int nmi)
 {
+    int stack_addr;
     printf("\n\r");
     #ifdef CPM_MON_DEBUG
     printf("Enter monitor\n\r");
     #endif
+    if (nmi) {
+        stack_addr = sizeof(mon);
+    } else {
+        stack_addr = sizeof(mon_rstmon);
+    }
+    z80_context.nmi = nmi;
 
-    dma_read_from_sram((uint32_t)mmu_bank << 16, tmp_buf[0], sizeof(mon));
-    z80_context.sp = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 2]);
-    z80_context.af = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 4]);
-    z80_context.bc = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 6]);
-    z80_context.de = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 8]);
-    z80_context.hl = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 10]);
-    z80_context.ix = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 12]);
-    z80_context.iy = read_mcu_mem_w(&tmp_buf[0][sizeof(mon) - 14]);
+    dma_read_from_sram((uint32_t)mmu_bank << 16, tmp_buf[0], stack_addr);
+    z80_context.sp = read_mcu_mem_w(&tmp_buf[0][stack_addr - 2]);
+    z80_context.af = read_mcu_mem_w(&tmp_buf[0][stack_addr - 4]);
+    z80_context.bc = read_mcu_mem_w(&tmp_buf[0][stack_addr - 6]);
+    z80_context.de = read_mcu_mem_w(&tmp_buf[0][stack_addr - 8]);
+    z80_context.hl = read_mcu_mem_w(&tmp_buf[0][stack_addr - 10]);
+    z80_context.ix = read_mcu_mem_w(&tmp_buf[0][stack_addr - 12]);
+    z80_context.iy = read_mcu_mem_w(&tmp_buf[0][stack_addr - 14]);
 
     uint16_t sp = z80_context.sp;
-    dma_read_from_sram(((uint32_t)mmu_bank << 16) + (sp & ~0xf), tmp_buf[0], 16);
-    z80_context.pc = read_mcu_mem_w(&tmp_buf[0][sp & 0xf]);
+    dma_read_from_sram(((uint32_t)mmu_bank << 16) + sp, tmp_buf[0], 2);
+    z80_context.pc = read_mcu_mem_w(tmp_buf[0]);
+    mon_cur_addr = z80_context.pc;
+
+    if (!nmi && mon_bp_installed && z80_context.pc == mon_bp_addr + 1) {
+        printf("Break at %04X\n\r", mon_bp_addr);
+        dma_write_to_sram(((uint32_t)mmu_bank << 16) + mon_bp_addr, &mon_bp_saved_inst, 1);
+        z80_context.pc--;
+        mon_bp_installed = 0;
+        mon_cur_addr = mon_bp_addr;
+    }
 }
 
 void edit_line(char *line, int maxlen, int start, int pos)
@@ -522,6 +549,8 @@ static const struct {
     const char *name;
     uint8_t nargs;
 } mon_cmds[] = {
+    { 'b', "breakpoint",    1 },
+    { 'C', "clear",         0 },
     { 'c', "continue",      0 },
     { 'd', "disassemble",   2 },
     { 'x', "dump",          2 },
@@ -529,7 +558,6 @@ static const struct {
     { 's', "status",        0 },
     { 'h', "help",          0 },
 };
-uint32_t mon_cur_addr = 0;
 
 void mon_help(void)
 {
@@ -707,11 +735,22 @@ void mon_status(void)
     printf("PC: %04X  ", z80_context.pc);
     printf("SP: %04X  ", z80_context.sp);
     printf("AF: %04X  ", z80_context.af);
-    printf("BC: %04X\n\r", z80_context.bc);
+    printf("BC: %04X  ", z80_context.bc);
     printf("DE: %04X  ", z80_context.de);
     printf("HL: %04X  ", z80_context.hl);
     printf("IX: %04X  ", z80_context.ix);
     printf("IY: %04X\n\r", z80_context.iy);
+    printf("MMU: bank %02X  ", mmu_bank);
+    printf("STATUS: %c%c%c%c%c%c%c%c",
+           (z80_context.af & 0x80) ? 'S' : '-',
+           (z80_context.af & 0x40) ? 'Z' : '-',
+           (z80_context.af & 0x20) ? 'X' : '-',
+           (z80_context.af & 0x10) ? 'H' : '-',
+           (z80_context.af & 0x08) ? 'X' : '-',
+           (z80_context.af & 0x04) ? 'P' : '-',
+           (z80_context.af & 0x02) ? 'N' : '-',
+           (z80_context.af & 0x01) ? 'C' : '-');
+    printf("\n\r");
 
     printf("\n\r");
     printf("stack:\n\r");
@@ -725,6 +764,47 @@ void mon_status(void)
 
     printf("\n\r");
     disas_ops(disas_z80, ((uint32_t)mmu_bank << 16) + pc, &tmp_buf[0][pc & 0xf], 16, 16, NULL);
+}
+
+void mon_breakpoint(char *args[])
+{
+    uint8_t rst08[] = { 0xcf };
+    char *p;
+
+    if (args[0] != NULL && *args[0] != '\0') {
+        // break point address specified
+        if (mon_bp_installed) {
+            // clear previous break point if it exist
+            dma_write_to_sram(((uint32_t)mmu_bank << 16) + mon_bp_addr, &mon_bp_saved_inst, 1);
+            mon_bp_installed = 0;
+        }
+
+        mon_bp_addr = strtoul(args[0], &p, 16);  // new break point address
+        printf("Set breakpoint at %04X\n\r", mon_bp_addr);
+
+        // save and replace the instruction at the break point with RST instruction
+        dma_read_from_sram(((uint32_t)mmu_bank << 16) + mon_bp_addr, &mon_bp_saved_inst, 1);
+        dma_write_to_sram(((uint32_t)mmu_bank << 16) + mon_bp_addr, rst08, 1);
+        memcpy(&tmp_buf[1][0x08], &mon_rstmon[0x08], sizeof(mon_rstmon) - 0x08);
+        mon_bp_installed = 1;
+    } else {
+        if (mon_bp_installed) {
+            printf("Breakpoint is %04X\n\r", mon_bp_addr);
+        } else {
+            printf("Breakpoint is not set\n\r");
+        }
+    }
+}
+
+void mon_clear_breakpoint()
+{
+    if (mon_bp_installed) {
+        printf("Clear breakpoint at %04X\n\r", mon_bp_addr);
+        dma_write_to_sram(((uint32_t)mmu_bank << 16) + mon_bp_addr, &mon_bp_saved_inst, 1);
+        mon_bp_installed = 0;
+    } else {
+        printf("Breakpoint is not set\n\r");
+    }
 }
 
 int mon_prompt(void)
@@ -766,6 +846,12 @@ int mon_prompt(void)
     #endif
 
     switch (command) {
+    case 'b':
+        mon_breakpoint(args);
+        break;
+    case 'C':
+        mon_clear_breakpoint();
+        break;
     case 'c':
         return 1;
     case 'd':
@@ -1012,6 +1098,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     case MON_ENTER:
     case MON_RESTORE:
+    case MON_BREAK:
         do_bus_master = 1;
         break;
     default:
@@ -1045,7 +1132,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     switch (io_addr) {
     case MON_ENTER:
-        mon_enter();
+    case MON_BREAK:
+        mon_enter(io_addr == MON_ENTER /* NMI or not*/);
         while (!mon_prompt());
         mon_leave();
         goto io_exit;
