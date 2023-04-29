@@ -4,11 +4,12 @@ FATFS_DIR := $(PJ_DIR)/../FatFs
 DISKIO_DIR := $(PJ_DIR)/diskio
 SRC_DIR := $(PJ_DIR)
 CPM2_DIR := $(PJ_DIR)/cpm2
-PORT := /dev/tty.usbmodem1444301
+PROGPORT := /dev/tty.usbmodem1444301
+CONSPORT := /dev/cu.usbserial-144440
 PIC := 18F47Q43
 
 #PP3_DIR := $(PJ_DIR)/../a-p-prog/sw
-PP3_OPTS := -c $(PORT) -s 1700 -v 2 -r 30 -t $(PIC)
+PP3_OPTS := -c $(PROGPORT) -s 1700 -v 2 -r 30 -t $(PIC)
 
 FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := $(DISKIO_DIR)/SDCard.c $(DISKIO_DIR)/SPI0.c $(DISKIO_DIR)/SPI1.c \
@@ -62,6 +63,9 @@ upload: emuz80_z80ram.hex
             echo using `which pp3`; \
             pp3 $(PP3_OPTS) $(PJ_DIR)/emuz80_z80ram.hex; \
         fi
+
+test::
+	PORT=$(CONSPORT) test/test.sh
 
 clean::
 	cd $(SRC_DIR); rm -f ipl.lst ipl.bin ipl.inc nmimon.lst nmimon.bin nmimon.inc
