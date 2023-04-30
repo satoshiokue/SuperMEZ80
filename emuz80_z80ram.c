@@ -173,6 +173,8 @@ int invoke_monitor = 0;
 uint32_t mon_bp_addr;
 uint8_t mon_bp_installed = 0;
 uint8_t mon_bp_saved_inst;
+unsigned int mon_step_execution = 0;
+const char *mon_prompt_str = "MON>";
 
 // MMU
 int mmu_bank = 0;
@@ -421,6 +423,29 @@ void write_mcu_mem_w(void *addr, uint16_t val)
     *p++ = ((val >> 8) & 0xff);
 }
 
+void mon_show_registers(void)
+{
+    printf("PC: %04X  ", z80_context.pc);
+    printf("SP: %04X  ", z80_context.sp);
+    printf("AF: %04X  ", z80_context.af);
+    printf("BC: %04X  ", z80_context.bc);
+    printf("DE: %04X  ", z80_context.de);
+    printf("HL: %04X  ", z80_context.hl);
+    printf("IX: %04X  ", z80_context.ix);
+    printf("IY: %04X\n\r", z80_context.iy);
+    printf("MMU: bank %02X  ", mmu_bank);
+    printf("STATUS: %c%c%c%c%c%c%c%c",
+           (z80_context.af & 0x80) ? 'S' : '-',
+           (z80_context.af & 0x40) ? 'Z' : '-',
+           (z80_context.af & 0x20) ? 'X' : '-',
+           (z80_context.af & 0x10) ? 'H' : '-',
+           (z80_context.af & 0x08) ? 'X' : '-',
+           (z80_context.af & 0x04) ? 'P' : '-',
+           (z80_context.af & 0x02) ? 'N' : '-',
+           (z80_context.af & 0x01) ? 'C' : '-');
+    printf("\n\r");
+}
+
 void mon_setup(void)
 {
     dma_read_from_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
@@ -455,6 +480,15 @@ void mon_enter(int nmi)
     dma_read_from_sram(((uint32_t)mmu_bank << 16) + sp, tmp_buf[0], 2);
     z80_context.pc = read_mcu_mem_w(tmp_buf[0]);
     mon_cur_addr = z80_context.pc;
+
+    if (mon_step_execution) {
+        mon_step_execution--;
+        mon_cur_addr = z80_context.pc;
+
+        mon_show_registers();
+        dma_read_from_sram(((uint32_t)mmu_bank << 16) + mon_cur_addr, tmp_buf[0], 64);
+        disas_ops(disas_z80, ((uint32_t)mmu_bank << 16) + mon_cur_addr, tmp_buf[0], 1, 64, NULL);
+    }
 
     if (!nmi && mon_bp_installed && z80_context.pc == mon_bp_addr + 1) {
         printf("Break at %04X\n\r", mon_bp_addr);
@@ -555,6 +589,7 @@ static const struct {
     { 'd', "disassemble",   2 },
     { 'x', "dump",          2 },
     { 'r', "reset",         0 },
+    { 'S', "step",          1 },
     { 's', "status",        0 },
     { 'h', "help",          0 },
 };
@@ -595,20 +630,22 @@ int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
 {
     int nmatches = 0;
     int match_idx;
-    static int last_command = -1;
+    static int last_command_idx = -1;
+    unsigned int cmd_idx;
 
     for (int i = 0; i < MON_MAX_ARGS; i++)
         args[i] = NULL;
 
     mon_remove_space(&line);
-    if (*line == '\0' && 0 < last_command) {
-        *command = last_command;
+    if (*line == '\0' && 0 < last_command_idx) {
+        *command = mon_cmds[last_command_idx].command;
+        printf("\r%s%s", mon_prompt_str, mon_cmds[last_command_idx].name);
         return 0;
     }
-    last_command = -1;
+    last_command_idx = -1;
 
     // Search command in the command table
-    for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
+    for (cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
         int i;
         for (i = 0; line[i] && line[i] != ' '; i++) {
             if (line[i] <= 'z' && line[i] != mon_cmds[cmd_idx].name[i] &&
@@ -663,7 +700,7 @@ int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
     }
 
     *command = mon_cmds[match_idx].command;
-    last_command = mon_cmds[match_idx].command;
+    last_command_idx = match_idx;
     return 0;
 }
 
@@ -727,30 +764,21 @@ void mon_disas(char *args[])
     #endif
 }
 
+void mon_step(char *args[])
+{
+    if (args[0] != NULL && *args[0] != '\0') {
+        mon_step_execution = strtoul(args[0], NULL, 16);
+    } else {
+        mon_step_execution = 1;
+    }
+}
+
 void mon_status(void)
 {
     uint16_t sp = z80_context.sp;
     uint16_t pc = z80_context.pc;
 
-    printf("PC: %04X  ", z80_context.pc);
-    printf("SP: %04X  ", z80_context.sp);
-    printf("AF: %04X  ", z80_context.af);
-    printf("BC: %04X  ", z80_context.bc);
-    printf("DE: %04X  ", z80_context.de);
-    printf("HL: %04X  ", z80_context.hl);
-    printf("IX: %04X  ", z80_context.ix);
-    printf("IY: %04X\n\r", z80_context.iy);
-    printf("MMU: bank %02X  ", mmu_bank);
-    printf("STATUS: %c%c%c%c%c%c%c%c",
-           (z80_context.af & 0x80) ? 'S' : '-',
-           (z80_context.af & 0x40) ? 'Z' : '-',
-           (z80_context.af & 0x20) ? 'X' : '-',
-           (z80_context.af & 0x10) ? 'H' : '-',
-           (z80_context.af & 0x08) ? 'X' : '-',
-           (z80_context.af & 0x04) ? 'P' : '-',
-           (z80_context.af & 0x02) ? 'N' : '-',
-           (z80_context.af & 0x01) ? 'C' : '-');
-    printf("\n\r");
+    mon_show_registers();
 
     printf("\n\r");
     printf("stack:\n\r");
@@ -811,15 +839,14 @@ int mon_prompt(void)
 {
     char line[32];
     char *args[MON_MAX_ARGS];
-    const char *prompt = "MON>";
-    const int prompt_len = strlen(prompt);
+    const int prompt_len = strlen(mon_prompt_str);
     char* input = &line[prompt_len];
 
-    sprintf(line, prompt);
+    sprintf(line, mon_prompt_str);
     edit_line(line, sizeof(line), prompt_len, prompt_len);
-    printf("\n\r");
 
     #ifdef CPM_MON_DEBUG
+    printf("\n\r");
     util_hexdump("edit_line: ", line, sizeof(line));
     printf("command: %s\n\r", input);
     #endif
@@ -829,10 +856,12 @@ int mon_prompt(void)
     uint16_t arg2;
 
     if (mon_parse(input, &command, args)) {
+        printf("\n\r");
         printf("unknown command: %s\n\r", input);
         mon_help();
         return 0;
     }
+    printf("\n\r");
 
     #ifdef CPM_MON_DEBUG
     printf("command: %c", command);
@@ -860,6 +889,9 @@ int mon_prompt(void)
     case 'r':
         RESET();
         // no return
+    case 'S':
+        mon_step(args);
+        return 1;
     case 's':
         mon_status();
         break;
@@ -909,6 +941,46 @@ void mon_restore(void)
     uint16_t pc = z80_context.pc - size;
     dma_write_to_sram(((uint32_t)mmu_bank << 16) + pc, &z80_context.saved_prog, size);
     dma_write_to_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
+
+    if (mon_step_execution) {
+        #ifdef CPM_MON_DEBUG
+        printf("Single step execution ...\n\r");
+        #endif
+
+        // Stop the clock for Z80
+        LATA3 = 1;          // CLK
+        RA3PPS = 0x00;      // unbind NCO1 and CLK (RA3)
+
+        bus_master(0);
+        LATE0 = 1;          // Clear /BUSREQ so that the Z80 can run
+
+        invoke_monitor = 1;
+        for (int i = 0; i < 32; i++) {
+            // 1 clock
+            LATA3 = 1;
+            __delay_us(1);
+            LATA3 = 0;
+            __delay_us(1);
+            #ifdef CPM_MON_DEBUG
+            if (!RA0 || !RA1) {
+                printf("%2d: %04X %c /IORQ=%d  /MREQ=%d\n\r",
+                       i, ((PORTD & 0x3f) << 8) | PORTB, !RA5 ? 'R' : 'W', RA0, RA1);
+            } else {
+                printf("%2d:      %c /IORQ=%d  /MREQ=%d\n\r",
+                       i, ' ', RA0, RA1);
+            }
+            #endif
+            if (!RA1 && !RA5) {
+                // First memory read is M1 instruction fetch
+                break;
+            }
+        }
+
+        // Restart the clock for Z80
+        LATE0 = 0;          // set /BUSREQ to active
+        RA3PPS = 0x3f;      // RA3 asign NCO1
+        bus_master(1);
+    }
 }
 
 // Called at UART3 receiving some data
@@ -1134,7 +1206,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case MON_ENTER:
     case MON_BREAK:
         mon_enter(io_addr == MON_ENTER /* NMI or not*/);
-        while (!mon_prompt());
+        while (!mon_step_execution && !mon_prompt());
         mon_leave();
         goto io_exit;
     case MON_RESTORE:
