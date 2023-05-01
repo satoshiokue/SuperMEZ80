@@ -1,91 +1,92 @@
-# SuperMEZ80
+# Firmware for SuperMEZ80-SPI
 
-![SuperMEZ80](https://github.com/satoshiokue/SuperMEZ80/blob/main/imgs/IMG_1595.jpeg)  
-Z80B 6MHz no wait  
+EMUZ80用のメザニンボードSuperMEZ80-SPI用のファームウェアです。
+Satoshi Okueさん(@S_Okue)さんのSuperMEZ80にSPIインターフェースのmicro SD Card slotなどを追加して
+EMUZ80でCP/M 2.2を動作させることができます。
 
-![SuperMEZ80](https://github.com/satoshiokue/SuperMEZ80/blob/main/imgs/IMG_1555.jpeg)  
-Z80 Single-Board Computer  
+Zilog Z0840004PSCとPIC18F47Q43の組み合わせで動作確認しています。
 
-![SuperMEZ80](https://github.com/satoshiokue/SuperMEZ80/blob/main/imgs/IMG_1556.jpeg)  
-積載可能  
+## 特徴
 
-電脳伝説さん(@vintagechips)のEMUZ80が出力するZ80 CPU制御信号をメザニンボードで組み替え、Z80と64kB RAMを動作させることができます。  
-RAMの制御信号とIOアクセスのWAIT信号をPICのCLC(Configurable Logic Cell)機能で作成しています。  
-電源が入るとPICはZ80を停止させ、ROMデータをRAMに転送します。データ転送完了後、バスの所有権をZ80に渡してリセットを解除します。  
+* z80pack(https://github.com/udo-munk/z80pack) のSIMとある程度互換性のあるI/Oを実装しているため、
+z80packのCP/M 2.2のディスクイメージを起動することができます。  
+（全てのI/Oが実装されているわけではありません。残念ながらCP/M 3は起動中にハングアップします。）
+* SuperMEZ80同様に、RAMの制御信号とIOアクセスのWAIT信号をPICのCLC(Configurable Logic Cell)機能で作成しています。
+* SuperMEZ80ではPICとSRAMのA14が接続されていますが、これを諦めて代わりにSPIの/CSに使用することにより、I/O expander (MCP23S08)を接続しています。SPIのMOSI/MISO/SCKはZ80のデータバスと共用です。
+* I/O expanderからZ80の/NMIに接続しています。PICからZ80に割り込みをかけることができます。
 
-LH0080BとPIC18F47Q43の組み合わせで動作確認しています。  
-
-動作確認済みCPU  
-SGS Z8400B1 2.5MHz  
-SHARP LH0080 2.5MHz  
-SHARP LH0080B 6MHz  
-Zilog Z84C0010PEG 10MHz  
-
-このソースコードは電脳伝説さんのmain.cを元に改変してGPLライセンスに基づいて公開するものです。
+![SuperMEZ80-SPI and EMUZ80](imgs/supermez80-spi-and-emuz80.png)  
+Z80 Single-Board Computer EMUZ80 と SuperMEZ80-SPI
 
 ## メザニンボード
-https://github.com/satoshiokue/MEZ80RAM  
-
-MEZ80RAM専用プリント基板 - オレンジピコショップ  
-https://store.shopping.yahoo.co.jp/orangepicoshop/pico-a-062.html
+https://github.com/hanyazou/SuperMEZ80-SPI
 
 ## 回路図
-https://github.com/satoshiokue/MEZ80RAM/blob/main/MEZ80RAM.pdf
+https://github.com/hanyazou/SuperMEZ80-SPI/schematic.pdf
 
 ## ファームウェア
 
-EMUZ80で配布されているフォルダemuz80.X下のmain.cと置き換えて使用してください。
-* emuz80_z80ram.c
-
-## クロック周波数による注意
-
-クロック周波数を5.6MHz以下にする際はファームウェアの149-150行目を確認してください。
+* macOSかLinuxでビルドできます
+* PIC18用のコンパイラ(XC8)を使います
+* FatFsライブラリが必要です
+* ソースコードを用意して、環境にあわせてMakefileを修正してください。
 ```
-//while(!RA0);                // /IORQ <5.6MHz  
-  while(!RD7);                // /WAIT >=5.6MHz  
-```
-Z80がIOアドレスのデータリードを完了するタイミングに適した信号を選択してください。  
-
-両方のwhile文をコメントアウトすると16MHzまで動作するようです。  
-
-## アドレスマップ
-```
-Memory
-RAM   0x0000 - 0xFFFF 64kバイト
-
-I/O
-通信レジスタ 0x00
-制御レジスタ 0x01
+% git clone https://github.com/hanyazou/FatFs
+% git clone https://github.com/hanyazou/SuperMEZ80
+% cd SuperMEZ80
+% make
 ```
 
 ## PICプログラムの書き込み
-EMUZ80技術資料8ページにしたがってPICに適合するファイルを書き込んでください。  
+EMUZ80技術資料8ページにしたがってPICにファームウェアを書き込んでください。
 
 またはArduino UNOを用いてPICを書き込みます。  
 https://github.com/satoshiokue/Arduino-PIC-Programmer
 
-PIC18F47Q43 SuperMEZ80_xMHz_Q43.hex  
-
-PIC18F47Q83 SuperMEZ80_xMHz_Q8x.hex  
-PIC18F47Q84 SuperMEZ80_xMHz_Q8x.hex  
-
-
 ## Z80プログラムの格納
-インテルHEXデータを配列データ化して配列rom[]に格納すると0x0000に転送されZ80で実行できます。
-ROMデータは最大32kBまで転送できますが、現行のファームウェアは8kバイト(0x0000-0x1FFF)転送しています。
+SuperMEZ80ではインテルHEXデータを配列データ化して配列rom[]に格納すると0x0000に転送されZ80で実行できます。
+SuperMEZ80-SPI用のファームウェアでは、rom[]に小さなプログラム(ipl.z80)が格納されいます。
+これが実行されるとSDカードのディスクイメージの最初のセクタを読み込んで実行されます。
 
+SDカードのディスクイメージは、
+SDカードにCPMDISKSというフォルダを作成し、
+このプロジェクトのcpm2/drivea.dskをコピーしておきます。
+
+### ディスクイメージの修正について
+cpm2/drivea.dskは、z80packのCP/M 2.2用起動ディスクを修正したものです。
+ディスクの読み書きをDMAでなく、プログラムI/Oに変更しています。
+I/O expanderを使用できない場合は、CP/Mの起動にこのプログラムI/Oの修正が必要です。
+具体的な修正内容は、同じフォルダのboot.asm, bios.asmの履歴を参照してください。
+置き換え手順はMakefileを参照してください。
+
+I/O expanderを使用する場合は、z80packのCP/M 2.2起動ディスクを無修正で使うことができます。
+(プログラムI/Oも使用できます)
 
 ## 謝辞
-思い入れのあるCPUを動かすことのできるシンプルで美しいEMUZ80を開発された電脳伝説さんに感謝いたします。
+シンプルで美しいEMUZ80を開発された電脳伝説さんに感謝します。  
+Z80Bを6MHzノーウェイトで動かしたSatoshi Okueさんに感謝します。  
+またSPI接続もSatoshi OkueさんのMEZ80LEDを参考にしました。  
 
-そしてEMUZ80の世界を発展させている開発者の皆さんから刺激を受けてZ80Bを6MHzノーウェイトで動かすところまで来られました。
+## ライセンス
+元のソースコードは電脳伝説さんのmain.cを元に改変してGPLライセンスに基づいて公開されています。
+新たに追加したソースコードは、扱いやすいようにMITライセンスです。
+各ファイル冒頭のライセンスを参照してください。
 
-## 参考）EMUZ80
+## リファレンス
+### EMUZ80
 EUMZ80はZ80CPUとPIC18F47Q43のDIP40ピンIC2つで構成されるシンプルなコンピュータです。
 
-![EMUZ80](https://github.com/satoshiokue/EMUZ80-6502/blob/main/imgs/IMG_Z80.jpeg)
+![EMUZ80](imgs/IMG_Z80.jpeg)
 
 電脳伝説 - EMUZ80が完成  
 https://vintagechips.wordpress.com/2022/03/05/emuz80_reference  
 EMUZ80専用プリント基板 - オレンジピコショップ  
 https://store.shopping.yahoo.co.jp/orangepicoshop/pico-a-051.html
+
+### SuperMEZ80
+SuperMEZ80は、EMUZ80にSRAMを追加し、Z80をノーウェイトで動かすことができるメザニンボードです
+
+![EMUZ80](imgs/IMG_1595.jpeg)
+
+SuperMEZ80
+https://github.com/satoshiokue/SuperMEZ80

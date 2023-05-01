@@ -21,14 +21,20 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __UTILS_H__
-#define __UTILS_H__
+#ifndef __MCP23S08_H__
+#define __MCP23S08_H__
 
-#define UTIL_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define UTIL_MAX(a, b) ((a) > (b) ? (a) : (b))
+struct MCP23S08;
+extern struct MCP23S08 *MCP23S08_ctx;
 
-void util_hexdump(const char *header, void *addr, int size);
-void util_hexdump_sum(const char *header, void *addr, int size);
-void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size);
+#define MCP23S08_PINMODE_OUTPUT 0
+#define MCP23S08_PINMODE_INPUT  1
 
-#endif  // __UTILS_H__
+void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, uint8_t addr);
+int mcp23s08_probe(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, uint8_t addr);
+int mcp23s08_is_alive(struct MCP23S08 *ctx);
+void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode);
+void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val);
+void mcp23s08_dump_regs(struct MCP23S08 *ctx, const char *header);
+
+#endif  // __MCP23S08_H__

@@ -21,14 +21,27 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __UTILS_H__
-#define __UTILS_H__
+#ifndef __DISAS_H__
+#define __DISAS_H__
 
-#define UTIL_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define UTIL_MAX(a, b) ((a) > (b) ? (a) : (b))
+#include <stdint.h>
 
-void util_hexdump(const char *header, void *addr, int size);
-void util_hexdump_sum(const char *header, void *addr, int size);
-void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size);
+#define DISAS_OPERAND     0x00
+#define DISAS_OPERAND_0   0x00
+#define DISAS_OPERAND_1   0x01
+#define DISAS_OPERAND_2   0x02
+#define DISAS_PREFIX_FUNC 0x10
+#define DISAS_BIG_ENDIAN  0xe0
+#define DISAS_END         0xf0
 
-#endif  // __UTILS_H__
+typedef struct disas_inst_desc {
+    uint8_t attr;
+    uint8_t op;
+    void *ptr;
+} disas_inst_desc_t;
+
+int disas_op(const disas_inst_desc_t *ids, uint8_t *inst, int len, char *buf, int buf_len);
+int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts, int len, int nops,
+              void (*func)(char *line));
+
+#endif  // __DISAS_H__

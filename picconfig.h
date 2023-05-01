@@ -83,8 +83,8 @@
 // #pragma config statements should precede project file includes.
 // Use project enums instead of #define for ON and OFF.
 
-#define _XTAL_FREQ 64000000UL
-
 #endif  // INCLUDE_PIC_PRAGMA
+
+#define _XTAL_FREQ 64000000UL
 
 #endif  // __PICCONFIG_H__

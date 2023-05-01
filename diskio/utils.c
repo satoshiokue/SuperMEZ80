@@ -29,9 +29,31 @@ void util_hexdump(const char *header, void *addr, int size)
 {
     char chars[17];
     uint8_t *buf = addr;
+    size = ((size + 15) & ~0xf);
     for (int i = 0; i < size; i++) {
         if ((i % 16) == 0)
             printf("%s%04x:", header, i);
+        printf(" %02x", buf[i]);
+        if (0x20 <= buf[i] && buf[i] <= 0x7e) {
+            chars[i % 16] = buf[i];
+        } else {
+            chars[i % 16] = '.';
+        }
+        if ((i % 16) == 15) {
+            chars[16] = '\0';
+            printf(" %s\n\r", chars);
+        }
+    }
+}
+
+void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size)
+{
+    char chars[17];
+    uint8_t *buf = addr;
+    size = ((size + 15) & ~0xf);
+    for (int i = 0; i < size; i++) {
+        if ((i % 16) == 0)
+            printf("%s%06lx:", header, addr_offs + i);
         printf(" %02x", buf[i]);
         if (0x20 <= buf[i] && buf[i] <= 0x7e) {
             chars[i % 16] = buf[i];
