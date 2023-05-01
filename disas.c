@@ -78,7 +78,7 @@ int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts, int l
         }
         if (func) {
         } else {
-            printf("%06X ", addr);
+            printf("%06lX ", addr);
             for (int i = 0; i < 4; i++) {
                 if (i < n)
                     printf("%02X ", insts[i]);
