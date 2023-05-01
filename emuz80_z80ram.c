@@ -58,6 +58,7 @@
 #define DISK_ST_ERROR        0x01
 #define DISK_REG_DMAL    15     // dma-port: dma address low
 #define DISK_REG_DMAH    16     // dma-port: dma address high
+#define DISK_REG_SECTORH 17     // fdc-port: # of sector high
 
 #define MMU_INIT         20     // MMU initialisation
 #define MMU_BANK_SEL     21     // MMU bank select
@@ -1037,7 +1038,7 @@ void __interrupt(irq(default),base(8)) Default_ISR(){
 void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     static uint8_t disk_drive = 0;
     static uint8_t disk_track = 0;
-    static uint8_t disk_sector = 0;
+    static uint16_t disk_sector = 0;
     static uint8_t disk_op = 0;
     static uint8_t disk_dmal = 0;
     static uint8_t disk_dmah = 0;
@@ -1139,7 +1140,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         disk_track = PORTC;
         break;
     case DISK_REG_SECTOR:
-        disk_sector = PORTC;
+        disk_sector = (disk_sector & 0xff00) | PORTC;
+        break;
+    case DISK_REG_SECTORH:
+        disk_sector = (disk_sector & 0x00ff) | (PORTC << 8);
         break;
     case DISK_REG_FDCOP:
         disk_op = PORTC;
