@@ -2,15 +2,15 @@
 
 EMUZ80用のメザニンボードSuperMEZ80-SPI用のファームウェアです。
 Satoshi Okueさん(@S_Okue)さんのSuperMEZ80にSPIインターフェースのmicro SD Card slotなどを追加して
-EMUZ80でCP/M 2.2を動作させることができます。
+EMUZ80でCP/Mを動作させることができます。
 
 Zilog Z0840004PSCとPIC18F47Q43の組み合わせで動作確認しています。
 
 ## 特徴
 
 * z80pack(https://github.com/udo-munk/z80pack) のSIMとある程度互換性のあるI/Oを実装しているため、
-z80packのCP/M 2.2のディスクイメージを起動することができます。  
-（全てのI/Oが実装されているわけではありません。残念ながらCP/M 3は起動中にハングアップします。）
+z80packのCP/Mのディスクイメージを起動することができます。  
+（全てのI/Oが実装されているわけではありません）
 * SuperMEZ80同様に、RAMの制御信号とIOアクセスのWAIT信号をPICのCLC(Configurable Logic Cell)機能で作成しています。
 * SuperMEZ80ではPICとSRAMのA14が接続されていますが、これを諦めて代わりにSPIの/CSに使用することにより、I/O expander (MCP23S08)を接続しています。SPIのMOSI/MISO/SCKはZ80のデータバスと共用です。
 * I/O expanderからZ80の/NMIに接続しています。PICからZ80に割り込みをかけることができます。
@@ -59,7 +59,7 @@ I/O expanderを使用できない場合は、CP/Mの起動にこのプログラ�
 具体的な修正内容は、同じフォルダのboot.asm, bios.asmの履歴を参照してください。
 置き換え手順はMakefileを参照してください。
 
-I/O expanderを使用する場合は、z80packのCP/M 2.2起動ディスクを無修正で使うことができます。
+I/O expanderを使用する場合は、z80packのCP/M起動ディスクを無修正で使うことができます。
 (プログラムI/Oも使用できます)
 
 ## 謝辞
