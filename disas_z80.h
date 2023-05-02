@@ -46,7 +46,7 @@ const disas_inst_desc_t disas_z80[] = {
     { DISAS_OPERAND_0,  0x0f,   "RRCA"          },
 
     { DISAS_OPERAND_1,  0x10,   "DJNZ,%d"       },
-    { DISAS_OPERAND_2,  0x11,   "LD BC,%04XH"   },
+    { DISAS_OPERAND_2,  0x11,   "LD DE,%04XH"   },
     { DISAS_OPERAND_0,  0x12,   "LD (DE),A"     },
     { DISAS_OPERAND_0,  0x13,   "INC DE"        },
     { DISAS_OPERAND_0,  0x14,   "INC D"         },

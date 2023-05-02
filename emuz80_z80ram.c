@@ -915,7 +915,7 @@ void mon_leave(void)
     uint16_t sp = z80_context.sp;
     const unsigned int size = sizeof(z80_context.saved_prog);
 
-    // Rewind PC on the NMI stack by 2 byes
+    // Rewind PC on the NMI stack by 2 bytes
     pc -= size;
     write_mcu_mem_w(tmp_buf[0], pc);
     dma_write_to_sram(((uint32_t)mmu_bank << 16) + sp, tmp_buf[0], 2);
