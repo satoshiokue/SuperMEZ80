@@ -38,6 +38,7 @@
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
 //#define CPM_MMU_DEBUG
+//#define CPM_MMU_EXERCISE
 //#define CPM_MON_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
@@ -134,7 +135,11 @@ int num_files = 0;
 
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
+#ifdef CPM_MMU_EXERCISE
+#include "mmu_exercise.inc"
+#else
 #include "ipl.inc"
+#endif
 };
 
 const unsigned char mon[] = {
@@ -247,7 +252,33 @@ void bus_master(int enable)
     }
 }
 
-void acquire_addrbus(uint32_t addr)
+void set_bank_pins(uint32_t addr)
+{
+    uint32_t mask = 0;
+    uint32_t val = 0;
+
+    #ifdef GPIO_BANK0
+    mask |= (1 << GPIO_BANK0);
+    if ((addr >> 16) & 1) {
+        val |= (1 << GPIO_BANK0);
+    }
+    #endif
+    #ifdef GPIO_BANK1
+    mask |= (1 << GPIO_BANK1);
+    if ((addr >> 17) & 1) {
+        val |= (1 << GPIO_BANK1);
+    }
+    #endif
+    #ifdef GPIO_BANK2
+    mask |= (1 << GPIO_BANK2);
+    if ((addr >> 18) & 1) {
+        val |= (1 << GPIO_BANK2);
+    }
+    #endif
+    mcp23s08_masked_write(MCP23S08_ctx, mask, val);
+}
+
+void dma_acquire_addrbus(uint32_t addr)
 {
     static int no_mcp23s08_warn = 1;
 
@@ -261,35 +292,17 @@ void acquire_addrbus(uint32_t addr)
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
-    #ifdef GPIO_BANK0
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, ((addr >> 16) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK0, MCP23S08_PINMODE_OUTPUT);
-    #endif
-    #ifdef GPIO_BANK1
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, ((addr >> 17) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK1, MCP23S08_PINMODE_OUTPUT);
-    #endif
-    #ifdef GPIO_BANK2
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, ((addr >> 18) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
-    #endif
+
+    set_bank_pins(addr);
 }
 
-void release_addrbus(void)
+void dma_release_addrbus(void)
 {
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
     // higher address lines must always be driven by MCP23S08
-    #ifdef GPIO_BANK0
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, ((mmu_bank >> 0) & 1));
-    #endif
-    #ifdef GPIO_BANK1
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, ((mmu_bank >> 1) & 1));
-    #endif
-    #ifdef GPIO_BANK2
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, ((mmu_bank >> 2) & 1));
-    #endif
+    set_bank_pins((uint32_t)mmu_bank << 16);
 }
 
 void dma_write_to_sram(uint32_t dest, void *buf, int len)
@@ -301,7 +314,7 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
-    acquire_addrbus(dest);
+    dma_acquire_addrbus(dest);
     TRISC = 0x00;       // Set as output to write to the SRAM
     for(i = 0; i < len - second_half; i++) {
         ab.w = addr;
@@ -314,7 +327,7 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
     }
 
     if (0 < second_half)
-        acquire_addrbus(dest + i);
+        dma_acquire_addrbus(dest + i);
     for( ; i < len; i++) {
         ab.w = addr;
         LATD = ab.h;
@@ -325,7 +338,7 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
         LATA2 = 1;      // deactivate /WE
     }
 
-    release_addrbus();
+    dma_release_addrbus();
 }
 
 void dma_read_from_sram(uint32_t src, void *buf, int len)
@@ -337,7 +350,7 @@ void dma_read_from_sram(uint32_t src, void *buf, int len)
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
-    acquire_addrbus(src);
+    dma_acquire_addrbus(src);
     TRISC = 0xff;       // Set as input to read from the SRAM
     for(i = 0; i < len - second_half; i++) {
         ab.w = addr;
@@ -350,7 +363,7 @@ void dma_read_from_sram(uint32_t src, void *buf, int len)
     }
 
     if (0 < second_half)
-        acquire_addrbus(src + i);
+        dma_acquire_addrbus(src + i);
     for( ; i < len; i++) {
         ab.w = addr;
         LATD = ab.h;
@@ -361,7 +374,7 @@ void dma_read_from_sram(uint32_t src, void *buf, int len)
         LATA4 = 1;      // deactivate /OE
     }
 
-    release_addrbus();
+    dma_release_addrbus();
 }
 
 void mmu_bank_config(int nbanks)
@@ -382,10 +395,10 @@ void mmu_bank_select(int bank)
         return;
     if (mmu_num_banks <= bank) {
         printf("ERROR: bank %d is not available.\n\r", bank);
-        while (1);
+        invoke_monitor = 1;
     }
     mmu_bank = bank;
-    release_addrbus();  // set higher address pins
+    set_bank_pins((uint32_t)mmu_bank << 16);
 }
 
 uint8_t hw_ctrl_read(void)
@@ -725,8 +738,8 @@ void mon_dump(char *args[])
 
     while (0 < len) {
         unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0]));
-        dma_read_from_sram(((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n);
-        util_addrdump("", ((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n);
+        dma_read_from_sram(addr, tmp_buf[0], n);
+        util_addrdump("", addr, tmp_buf[0], n);
         len -= n;
         addr += n;
     }
@@ -746,9 +759,9 @@ void mon_disas(char *args[])
     int leftovers = 0;
     while (leftovers < len) {
         unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0])) - leftovers;
-        dma_read_from_sram(((uint32_t)mmu_bank << 16) + addr, &tmp_buf[0][leftovers], n);
+        dma_read_from_sram(addr, &tmp_buf[0][leftovers], n);
         n += leftovers;
-        int done = disas_ops(disas_z80, ((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n, n, NULL);
+        int done = disas_ops(disas_z80, addr, tmp_buf[0], n, n, NULL);
         leftovers = n - done;
         len -= done;
         addr += done;
@@ -915,7 +928,7 @@ void mon_leave(void)
     uint16_t sp = z80_context.sp;
     const unsigned int size = sizeof(z80_context.saved_prog);
 
-    // Rewind PC on the NMI stack by 2 byes
+    // Rewind PC on the NMI stack by 2 bytes
     pc -= size;
     write_mcu_mem_w(tmp_buf[0], pc);
     dma_write_to_sram(((uint32_t)mmu_bank << 16) + sp, tmp_buf[0], 2);
@@ -944,43 +957,7 @@ void mon_restore(void)
     dma_write_to_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
 
     if (mon_step_execution) {
-        #ifdef CPM_MON_DEBUG
-        printf("Single step execution ...\n\r");
-        #endif
-
-        // Stop the clock for Z80
-        LATA3 = 1;          // CLK
-        RA3PPS = 0x00;      // unbind NCO1 and CLK (RA3)
-
-        bus_master(0);
-        LATE0 = 1;          // Clear /BUSREQ so that the Z80 can run
-
         invoke_monitor = 1;
-        for (int i = 0; i < 32; i++) {
-            // 1 clock
-            LATA3 = 1;
-            __delay_us(1);
-            LATA3 = 0;
-            __delay_us(1);
-            #ifdef CPM_MON_DEBUG
-            if (!RA0 || !RA1) {
-                printf("%2d: %04X %c /IORQ=%d  /MREQ=%d\n\r",
-                       i, ((PORTD & 0x3f) << 8) | PORTB, !RA5 ? 'R' : 'W', RA0, RA1);
-            } else {
-                printf("%2d:      %c /IORQ=%d  /MREQ=%d\n\r",
-                       i, ' ', RA0, RA1);
-            }
-            #endif
-            if (!RA1 && !RA5) {
-                // First memory read is M1 instruction fetch
-                break;
-            }
-        }
-
-        // Restart the clock for Z80
-        LATE0 = 0;          // set /BUSREQ to active
-        RA3PPS = 0x3f;      // RA3 asign NCO1
-        bus_master(1);
     }
 }
 
@@ -1167,7 +1144,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         mmu_bank_config(PORTC);
         break;
     case MMU_BANK_SEL:
-        mmu_bank_select(PORTC);
+        do_bus_master = 1;
         break;
     case HW_CTRL:
         hw_ctrl_write(PORTC);
@@ -1207,6 +1184,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
     switch (io_addr) {
+    case MMU_BANK_SEL:
+        mmu_bank_select(io_data);
+        goto io_exit;
     case MON_ENTER:
     case MON_BREAK:
         mon_enter(io_addr == MON_ENTER /* NMI or not*/);
@@ -1467,12 +1447,20 @@ void main(void) {
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
     #endif
 
+    uint32_t addr;
+#ifdef CPM_MMU_EXERCISE
+    mmu_mem_size = 0x80000;
+    mmu_num_banks = mmu_mem_size / 0x10000;
+    memset(tmp_buf[0], 0, TMP_BUF_SIZE * 2);
+    for (addr = 0; addr < mmu_mem_size; addr += TMP_BUF_SIZE * 2) {
+        dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE * 2);
+    }
+#else
     // RAM check
     for (i = 0; i < TMP_BUF_SIZE; i += 2) {
         tmp_buf[0][i + 0] = 0xa5;
         tmp_buf[0][i + 1] = 0x5a;
     }
-    uint32_t addr;
     for (addr = 0; addr < MAX_MEM_SIZE; addr += MEM_CHECK_UNIT) {
         printf("Memory 000000 - %06lXH\r", addr);
         tmp_buf[0][0] = (addr >>  0) & 0xff;
@@ -1613,21 +1601,12 @@ void main(void) {
         printf("No boot disk.\n\r");
         while (1);
     }
+#endif  // !CPM_MMU_EXERCISE
 
     //
     // Transfer ROM image to the SRAM
     //
-    acquire_addrbus(0x00000);
-    TRISC = 0x00;       // Set as output to write to the SRAM
-    for(i = 0; i < sizeof(rom); i++) {
-        ab.w = i;
-        LATD = ab.h;
-        LATB = ab.l;
-        LATA2 = 0;      // /WE=0
-        LATC = rom[i];
-        LATA2 = 1;      // /WE=1
-    }
-    release_addrbus();
+    dma_write_to_sram(0x00000, rom, sizeof(rom));
 
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
     ANSELD = 0x00;      // Disable analog function

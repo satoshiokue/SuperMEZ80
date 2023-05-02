@@ -1,0 +1,92 @@
+;	SuperMEZ80-SPI MMU exercise
+;
+;	Copyright (C) 2023 by Hanyazou
+;
+;Permission is hereby granted, free of charge, to any person
+;obtaining a copy of this software and associated documentation
+;files (the "Software"), to deal in the Software without
+;restriction, including without limitation the rights to use,
+;copy, modify, merge, publish, distribute, sublicense, and/or sell
+;copies of the Software, and to permit persons to whom the
+;Software is furnished to do so, subject to the following
+;conditions:
+;
+;The above copyright notice and this permission notice shall be
+;included in all copies or substantial portions of the Software.
+;
+;THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+;EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+;OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+;NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+;HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+;WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+;OTHER DEALINGS IN THE SOFTWARE.
+;
+	ORG	0		;mem base of boot
+;
+;	I/O ports
+;
+CONDAT	EQU	1		;console data port
+DRIVE   EQU	10		;fdc-port: # of drive
+TRACK   EQU	11		;fdc-port: # of track
+SECTOR  EQU	12		;fdc-port: # of sector
+FDCOP   EQU	13		;fdc-port: command
+FDCST   EQU	14		;fdc-port: status
+DMAL    EQU	15		;dma-port: dma address low
+DMAH    EQU	16		;dma-port: dma address high
+MMUINIT	EQU	20		;MMU INIT
+BNKSEL	EQU	21		;MMU bank select
+;
+BOOT:
+	JP	COLD
+        DEFS	128 - $, 0
+;
+HLOMSG:	DEFM	'Hello, bank memory!'
+	DEFB	13,10,0
+;
+COLD:
+	LD	HL,HLOMSG
+PRTMSG0:
+	LD	A,(HL)
+	OUT	(CONDAT),A
+	INC	HL
+	OR	A
+	JP	NZ,PRTMSG0
+
+	LD	A,8
+	OUT	(MMUINIT),A
+
+	LD	C,TESTEND - TESTSTART
+        LD	HL,TESTSTART
+        LD	DE,0C000H
+
+COPYLOOP:
+        LD	A,(HL)
+        LD	(DE),A
+        INC	HL
+        INC	DE
+        DEC	C
+        JR	NZ,COPYLOOP
+        JP	0C000H
+
+TESTSTART:
+        LD	HL,0100H
+	LD	C,9
+	LD	B,0
+TESTLOOP:
+	LD	A,B
+	OUT	(BNKSEL),A
+        LD	(HL),A
+        INC	HL
+	LD	A,'#'
+        LD	(HL),A
+        INC	B
+        DEC	C
+        JR	NZ,TESTLOOP
+INFLOOP:
+	NOP
+	JR	INFLOOP
+TESTEND:
+;
+	END
