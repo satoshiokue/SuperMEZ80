@@ -944,43 +944,7 @@ void mon_restore(void)
     dma_write_to_sram(((uint32_t)mmu_bank << 16), tmp_buf[1], sizeof(mon));
 
     if (mon_step_execution) {
-        #ifdef CPM_MON_DEBUG
-        printf("Single step execution ...\n\r");
-        #endif
-
-        // Stop the clock for Z80
-        LATA3 = 1;          // CLK
-        RA3PPS = 0x00;      // unbind NCO1 and CLK (RA3)
-
-        bus_master(0);
-        LATE0 = 1;          // Clear /BUSREQ so that the Z80 can run
-
         invoke_monitor = 1;
-        for (int i = 0; i < 32; i++) {
-            // 1 clock
-            LATA3 = 1;
-            __delay_us(1);
-            LATA3 = 0;
-            __delay_us(1);
-            #ifdef CPM_MON_DEBUG
-            if (!RA0 || !RA1) {
-                printf("%2d: %04X %c /IORQ=%d  /MREQ=%d\n\r",
-                       i, ((PORTD & 0x3f) << 8) | PORTB, !RA5 ? 'R' : 'W', RA0, RA1);
-            } else {
-                printf("%2d:      %c /IORQ=%d  /MREQ=%d\n\r",
-                       i, ' ', RA0, RA1);
-            }
-            #endif
-            if (!RA1 && !RA5) {
-                // First memory read is M1 instruction fetch
-                break;
-            }
-        }
-
-        // Restart the clock for Z80
-        LATE0 = 0;          // set /BUSREQ to active
-        RA3PPS = 0x3f;      // RA3 asign NCO1
-        bus_master(1);
     }
 }
 
