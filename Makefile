@@ -22,7 +22,7 @@ INCS :=-I$(SRC_DIR) -I$(DISKIO_DIR) -I$(FATFS_DIR)/source
 HDRS := picconfig.h \
         $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/SPI.h $(DISKIO_DIR)/SDCard.h $(DISKIO_DIR)/mcp23s08.h \
         $(SRC_DIR)/disas.h $(SRC_DIR)/disas_z80.h $(SRC_DIR)/ipl.inc $(SRC_DIR)/nmimon.inc \
-        $(SRC_DIR)/rstmon.inc
+        $(SRC_DIR)/rstmon.inc $(SRC_DIR)/mmu_exercise.inc 
 
 all: emuz80_z80ram.hex $(CPM2_DIR)/drivea.dsk
 
@@ -44,6 +44,11 @@ $(SRC_DIR)/rstmon.inc: $(SRC_DIR)/rstmon.z80
 	cd $(SRC_DIR); \
         sjasmplus --lst=rstmon.lst --raw=rstmon.bin rstmon.z80 && \
         cat rstmon.bin | xxd -i > rstmon.inc
+
+$(SRC_DIR)/mmu_exercise.inc: $(SRC_DIR)/mmu_exercise.z80
+	cd $(SRC_DIR); \
+        sjasmplus --lst=mmu_exercise.lst --raw=mmu_exercise.bin mmu_exercise.z80 && \
+        cat mmu_exercise.bin | xxd -i > mmu_exercise.inc
 
 $(CPM2_DIR)/boot.bin: $(CPM2_DIR)/boot.asm
 	cd $(CPM2_DIR); \
@@ -77,6 +82,7 @@ clean::
 	cd $(SRC_DIR); rm -f ipl.lst ipl.bin ipl.inc
 	cd $(SRC_DIR); rm -f nmimon.lst nmimon.bin nmimon.inc
 	cd $(SRC_DIR); rm -f rstmon.lst rstmon.bin rstmon.inc
+	cd $(SRC_DIR); rm -f mmu_exercise.lst mmu_exercise.bin mmu_exercise.inc
 	cd $(CPM2_DIR); rm -f boot.bin bios.bin
 	cd $(SRC_DIR); rm -f *.as *.p1 *.d *.pre *.lst *.cmf *.hxl *.sdb *.obj *.sym *.rlf \
             *.elf

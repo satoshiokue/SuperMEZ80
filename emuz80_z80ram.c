@@ -38,6 +38,7 @@
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
 //#define CPM_MMU_DEBUG
+//#define CPM_MMU_EXERCISE
 //#define CPM_MON_DEBUG
 
 #define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
@@ -134,7 +135,11 @@ int num_files = 0;
 
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
+#ifdef CPM_MMU_EXERCISE
+#include "mmu_exercise.inc"
+#else
 #include "ipl.inc"
+#endif
 };
 
 const unsigned char mon[] = {
@@ -382,7 +387,7 @@ void mmu_bank_select(int bank)
         return;
     if (mmu_num_banks <= bank) {
         printf("ERROR: bank %d is not available.\n\r", bank);
-        while (1);
+        invoke_monitor = 1;
     }
     mmu_bank = bank;
     release_addrbus();  // set higher address pins
@@ -725,8 +730,8 @@ void mon_dump(char *args[])
 
     while (0 < len) {
         unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0]));
-        dma_read_from_sram(((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n);
-        util_addrdump("", ((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n);
+        dma_read_from_sram(addr, tmp_buf[0], n);
+        util_addrdump("", addr, tmp_buf[0], n);
         len -= n;
         addr += n;
     }
@@ -746,9 +751,9 @@ void mon_disas(char *args[])
     int leftovers = 0;
     while (leftovers < len) {
         unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0])) - leftovers;
-        dma_read_from_sram(((uint32_t)mmu_bank << 16) + addr, &tmp_buf[0][leftovers], n);
+        dma_read_from_sram(addr, &tmp_buf[0][leftovers], n);
         n += leftovers;
-        int done = disas_ops(disas_z80, ((uint32_t)mmu_bank << 16) + addr, tmp_buf[0], n, n, NULL);
+        int done = disas_ops(disas_z80, addr, tmp_buf[0], n, n, NULL);
         leftovers = n - done;
         len -= done;
         addr += done;
@@ -1131,7 +1136,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         mmu_bank_config(PORTC);
         break;
     case MMU_BANK_SEL:
-        mmu_bank_select(PORTC);
+        do_bus_master = 1;
         break;
     case HW_CTRL:
         hw_ctrl_write(PORTC);
@@ -1171,6 +1176,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
     switch (io_addr) {
+    case MMU_BANK_SEL:
+        mmu_bank_select(io_data);
+        goto io_exit;
     case MON_ENTER:
     case MON_BREAK:
         mon_enter(io_addr == MON_ENTER /* NMI or not*/);
@@ -1431,12 +1439,20 @@ void main(void) {
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
     #endif
 
+    uint32_t addr;
+#ifdef CPM_MMU_EXERCISE
+    mmu_mem_size = 0x80000;
+    mmu_num_banks = mmu_mem_size / 0x10000;
+    memset(tmp_buf[0], 0, TMP_BUF_SIZE * 2);
+    for (addr = 0; addr < mmu_mem_size; addr += TMP_BUF_SIZE * 2) {
+        dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE * 2);
+    }
+#else
     // RAM check
     for (i = 0; i < TMP_BUF_SIZE; i += 2) {
         tmp_buf[0][i + 0] = 0xa5;
         tmp_buf[0][i + 1] = 0x5a;
     }
-    uint32_t addr;
     for (addr = 0; addr < MAX_MEM_SIZE; addr += MEM_CHECK_UNIT) {
         printf("Memory 000000 - %06lXH\r", addr);
         tmp_buf[0][0] = (addr >>  0) & 0xff;
@@ -1577,6 +1593,7 @@ void main(void) {
         printf("No boot disk.\n\r");
         while (1);
     }
+#endif  // !CPM_MMU_EXERCISE
 
     //
     // Transfer ROM image to the SRAM
