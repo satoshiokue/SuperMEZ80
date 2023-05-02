@@ -252,7 +252,33 @@ void bus_master(int enable)
     }
 }
 
-void acquire_addrbus(uint32_t addr)
+void set_bank_pins(uint32_t addr)
+{
+    uint32_t mask = 0;
+    uint32_t val = 0;
+
+    #ifdef GPIO_BANK0
+    mask |= (1 << GPIO_BANK0);
+    if ((addr >> 16) & 1) {
+        val |= (1 << GPIO_BANK0);
+    }
+    #endif
+    #ifdef GPIO_BANK1
+    mask |= (1 << GPIO_BANK1);
+    if ((addr >> 17) & 1) {
+        val |= (1 << GPIO_BANK1);
+    }
+    #endif
+    #ifdef GPIO_BANK2
+    mask |= (1 << GPIO_BANK2);
+    if ((addr >> 18) & 1) {
+        val |= (1 << GPIO_BANK2);
+    }
+    #endif
+    mcp23s08_masked_write(MCP23S08_ctx, mask, val);
+}
+
+void dma_acquire_addrbus(uint32_t addr)
 {
     static int no_mcp23s08_warn = 1;
 
@@ -266,35 +292,17 @@ void acquire_addrbus(uint32_t addr)
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
-    #ifdef GPIO_BANK0
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, ((addr >> 16) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK0, MCP23S08_PINMODE_OUTPUT);
-    #endif
-    #ifdef GPIO_BANK1
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, ((addr >> 17) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK1, MCP23S08_PINMODE_OUTPUT);
-    #endif
-    #ifdef GPIO_BANK2
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, ((addr >> 18) & 1));
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
-    #endif
+
+    set_bank_pins(addr);
 }
 
-void release_addrbus(void)
+void dma_release_addrbus(void)
 {
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
     // higher address lines must always be driven by MCP23S08
-    #ifdef GPIO_BANK0
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK0, ((mmu_bank >> 0) & 1));
-    #endif
-    #ifdef GPIO_BANK1
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK1, ((mmu_bank >> 1) & 1));
-    #endif
-    #ifdef GPIO_BANK2
-    mcp23s08_write(MCP23S08_ctx, GPIO_BANK2, ((mmu_bank >> 2) & 1));
-    #endif
+    set_bank_pins((uint32_t)mmu_bank << 16);
 }
 
 void dma_write_to_sram(uint32_t dest, void *buf, int len)
@@ -306,7 +314,7 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
-    acquire_addrbus(dest);
+    dma_acquire_addrbus(dest);
     TRISC = 0x00;       // Set as output to write to the SRAM
     for(i = 0; i < len - second_half; i++) {
         ab.w = addr;
@@ -319,7 +327,7 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
     }
 
     if (0 < second_half)
-        acquire_addrbus(dest + i);
+        dma_acquire_addrbus(dest + i);
     for( ; i < len; i++) {
         ab.w = addr;
         LATD = ab.h;
@@ -330,7 +338,7 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
         LATA2 = 1;      // deactivate /WE
     }
 
-    release_addrbus();
+    dma_release_addrbus();
 }
 
 void dma_read_from_sram(uint32_t src, void *buf, int len)
@@ -342,7 +350,7 @@ void dma_read_from_sram(uint32_t src, void *buf, int len)
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
-    acquire_addrbus(src);
+    dma_acquire_addrbus(src);
     TRISC = 0xff;       // Set as input to read from the SRAM
     for(i = 0; i < len - second_half; i++) {
         ab.w = addr;
@@ -355,7 +363,7 @@ void dma_read_from_sram(uint32_t src, void *buf, int len)
     }
 
     if (0 < second_half)
-        acquire_addrbus(src + i);
+        dma_acquire_addrbus(src + i);
     for( ; i < len; i++) {
         ab.w = addr;
         LATD = ab.h;
@@ -366,7 +374,7 @@ void dma_read_from_sram(uint32_t src, void *buf, int len)
         LATA4 = 1;      // deactivate /OE
     }
 
-    release_addrbus();
+    dma_release_addrbus();
 }
 
 void mmu_bank_config(int nbanks)
@@ -390,7 +398,7 @@ void mmu_bank_select(int bank)
         invoke_monitor = 1;
     }
     mmu_bank = bank;
-    release_addrbus();  // set higher address pins
+    set_bank_pins((uint32_t)mmu_bank << 16);
 }
 
 uint8_t hw_ctrl_read(void)
@@ -1598,17 +1606,7 @@ void main(void) {
     //
     // Transfer ROM image to the SRAM
     //
-    acquire_addrbus(0x00000);
-    TRISC = 0x00;       // Set as output to write to the SRAM
-    for(i = 0; i < sizeof(rom); i++) {
-        ab.w = i;
-        LATD = ab.h;
-        LATB = ab.l;
-        LATA2 = 0;      // /WE=0
-        LATC = rom[i];
-        LATA2 = 1;      // /WE=1
-    }
-    release_addrbus();
+    dma_write_to_sram(0x00000, rom, sizeof(rom));
 
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
     ANSELD = 0x00;      // Disable analog function
