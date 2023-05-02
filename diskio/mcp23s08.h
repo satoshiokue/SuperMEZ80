@@ -35,6 +35,7 @@ int mcp23s08_probe(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, 
 int mcp23s08_is_alive(struct MCP23S08 *ctx);
 void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode);
 void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val);
+void mcp23s08_masked_write(struct MCP23S08 *ctx, uint32_t mask, uint32_t val);
 void mcp23s08_dump_regs(struct MCP23S08 *ctx, const char *header);
 
 #endif  // __MCP23S08_H__

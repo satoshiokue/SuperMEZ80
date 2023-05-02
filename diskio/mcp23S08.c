@@ -197,6 +197,14 @@ void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val)
     mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
 }
 
+void mcp23s08_masked_write(struct MCP23S08 *ctx, uint32_t mask, uint32_t val)
+{
+    if (!ctx->alive || mask == 0)
+        return;
+    ctx->olat = ((ctx->olat & ~mask) | (val & mask));
+    mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
+}
+
 void mcp23s08_dump_regs(struct MCP23S08 *ctx, const char *header)
 {
     #ifdef MCP23S08_DEBUG
