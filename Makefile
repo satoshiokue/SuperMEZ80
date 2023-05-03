@@ -15,11 +15,12 @@ FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := $(DISKIO_DIR)/SDCard.c $(DISKIO_DIR)/SPI0.c $(DISKIO_DIR)/SPI1.c \
     $(DISKIO_DIR)/mcp23s08.c \
     $(DISKIO_DIR)/diskio.c $(DISKIO_DIR)/utils.c
-SRCS := $(SRC_DIR)/emuz80_z80ram.c $(SRC_DIR)/disas.c
+SRCS := $(SRC_DIR)/emuz80_z80ram.c $(SRC_DIR)/disas.c $(SRC_DIR)/memory.c $(SRC_DIR)/monitor.c \
+    $(SRC_DIR)/io.c
 
 INCS :=-I$(SRC_DIR) -I$(DISKIO_DIR) -I$(FATFS_DIR)/source
 
-HDRS := picconfig.h \
+HDRS := supermez80.h picconfig.h \
         $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/SPI.h $(DISKIO_DIR)/SDCard.h $(DISKIO_DIR)/mcp23s08.h \
         $(SRC_DIR)/disas.h $(SRC_DIR)/disas_z80.h $(SRC_DIR)/ipl.inc $(SRC_DIR)/nmimon.inc \
         $(SRC_DIR)/rstmon.inc $(SRC_DIR)/mmu_exercise.inc 
