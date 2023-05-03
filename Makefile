@@ -1,16 +1,16 @@
-PJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PROGPORT := /dev/tty.usbmodem1444301
+CONSPORT := /dev/cu.usbserial-144440
 XC8 := /Applications/microchip/xc8/v2.40/bin/xc8
+PIC := 18F47Q43
+#PP3_DIR := $(PJ_DIR)/../a-p-prog/sw
+PP3_OPTS := -c $(PROGPORT) -s 1700 -v 2 -r 30 -t $(PIC)
+
+PJ_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 FATFS_DIR := $(PJ_DIR)/../FatFs
 DISKIO_DIR := $(PJ_DIR)/diskio
 SRC_DIR := $(PJ_DIR)/src
 BUILD_DIR := $(PJ_DIR)/build
 CPM2_DIR := $(PJ_DIR)/cpm2
-PROGPORT := /dev/tty.usbmodem1444301
-CONSPORT := /dev/cu.usbserial-144440
-PIC := 18F47Q43
-
-#PP3_DIR := $(PJ_DIR)/../a-p-prog/sw
-PP3_OPTS := -c $(PROGPORT) -s 1700 -v 2 -r 30 -t $(PIC)
 
 FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := $(DISKIO_DIR)/SDCard.c $(DISKIO_DIR)/SPI0.c $(DISKIO_DIR)/SPI1.c \
@@ -29,40 +29,18 @@ HDRS := $(SRC_DIR)/supermez80.h $(SRC_DIR)/picconfig.h \
 
 all: $(BUILD_DIR)/supermez80.hex $(CPM2_DIR)/drivea.dsk
 
-$(BUILD_DIR)/supermez80.hex: $(SRCS) $(FATFS_SRCS) $(DISK_SRCS) $(HDRS) $(BUILD_DIR)
-	cd $(BUILD_DIR); \
+$(BUILD_DIR)/supermez80.hex: $(SRCS) $(FATFS_SRCS) $(DISK_SRCS) $(HDRS)
+	cd $(BUILD_DIR) && \
         $(XC8) --chip=$(PIC) $(INCS) $(SRCS) $(FATFS_SRCS) $(DISK_SRCS)
 
-$(BUILD_DIR):
-	mkdir $(BUILD_DIR)
+$(BUILD_DIR)/%.inc: $(SRC_DIR)/%.z80
+	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && \
+        sjasmplus --lst=%*.lst --raw=%*.bin $< && \
+        cat %*.bin | xxd -i > $@
 
-$(BUILD_DIR)/ipl.inc: $(SRC_DIR)/ipl.z80 $(BUILD_DIR)
-	cd $(BUILD_DIR); \
-        sjasmplus --lst=ipl.lst --raw=ipl.bin $(SRC_DIR)/ipl.z80 && \
-        cat ipl.bin | xxd -i > ipl.inc
-
-$(BUILD_DIR)/nmimon.inc: $(SRC_DIR)/nmimon.z80 $(BUILD_DIR)
-	cd $(BUILD_DIR); \
-        sjasmplus --lst=nmimon.lst --raw=nmimon.bin $(SRC_DIR)/nmimon.z80 && \
-        cat nmimon.bin | xxd -i > nmimon.inc
-
-$(BUILD_DIR)/rstmon.inc: $(SRC_DIR)/rstmon.z80 $(BUILD_DIR)
-	cd $(BUILD_DIR); \
-        sjasmplus --lst=rstmon.lst --raw=rstmon.bin $(SRC_DIR)/rstmon.z80 && \
-        cat rstmon.bin | xxd -i > rstmon.inc
-
-$(BUILD_DIR)/mmu_exercise.inc: $(SRC_DIR)/mmu_exercise.z80 $(BUILD_DIR)
-	cd $(BUILD_DIR); \
-        sjasmplus --lst=mmu_exercise.lst --raw=mmu_exercise.bin $(SRC_DIR)/mmu_exercise.z80 && \
-        cat mmu_exercise.bin | xxd -i > mmu_exercise.inc
-
-$(BUILD_DIR)/boot.bin: $(CPM2_DIR)/boot.asm $(BUILD_DIR)
-	cd $(BUILD_DIR); \
-        sjasmplus --raw=boot.bin $(SRC_DIR)/boot.asm
-
-$(BUILD_DIR)/bios.bin: $(CPM2_DIR)/bios.asm $(BUILD_DIR)
-	cd $(BUILD_DIR); \
-	sjasmplus --raw=bios.bin $(SRC_DIR)/bios.asm
+$(BUILD_DIR)/%.bin: $(CPM2_DIR)/%.asm $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && \
+        sjasmplus --raw=%*.bin %<
 
 $(BUILD_DIR)/drivea.dsk: $(CPM2_DIR)/boot.bin $(CPM2_DIR)/bios.bin
 	cd $(BUILD_DIR); \
@@ -74,7 +52,6 @@ upload: $(BUILD_DIR)/supermez80.hex
 	if [ .$(PP3_DIR) != . ]; then \
             echo using $(PP3_DIR)/pp3; \
             cd $(PP3_DIR); \
-            ./pp3 $(PP3_OPTS) $(BUILD_DIR)/supermez80.hex || \
             ./pp3 $(PP3_OPTS) $(BUILD_DIR)/supermez80.hex; \
         else \
             echo using `which pp3`; \
