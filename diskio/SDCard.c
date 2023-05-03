@@ -26,6 +26,8 @@
 #include "SPI.h"
 #include "SDCard.h"
 
+#define SPI_PREFIX SPI0
+
 // #define SDCARD_DEBUG
 #if defined(SDCARD_DEBUG)
 #define dprintf(args) do { printf args; } while(0)
@@ -34,6 +36,7 @@
 #endif
 
 static struct SDCard {
+    struct SPI *spi;
     uint8_t clock_delay;
     uint16_t timeout;
 } ctx_ = { 0 };
@@ -41,22 +44,25 @@ static struct SDCard {
 
 SDCard_end_transaction()
 {
-    SPI_end_transaction();
-    SPI_dummy_clocks(1);
+    struct SPI *spi = ctx->spi;
+    SPI(end_transaction)(spi);
+    SPI(dummy_clocks)(spi, 1);
 }
 
 int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t timeout)
 {
+    ctx->spi = SPI0_ctx;
     ctx->clock_delay = clock_delay;
     ctx->timeout = timeout;
-    SPI_begin();
+    struct SPI *spi = ctx->spi;
+    SPI(begin)(spi);
 
     uint8_t buf[5];
     dprintf(("\n\rSD Card: initialize ...\n\r"));
 
-    SPI_configure(initial_clock_delay, SPI_MSBFIRST, SPI_MODE0);
-    SPI_begin_transaction();
-    SPI_dummy_clocks(10);
+    SPI(configure)(spi, initial_clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(begin_transaction)(spi);
+    SPI(dummy_clocks)(spi, 10);
     SDCard_end_transaction();
 
     // CMD0 go idle state
@@ -116,7 +122,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
         return SDCARD_BADRESPONSE;
     }
 
-    SPI_configure(ctx->clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(configure)(spi, ctx->clock_delay, SPI_MSBFIRST, SPI_MODE0);
 
     dprintf(("SD Card: initialize ... succeeded\n\r"));
 
@@ -125,15 +131,17 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
 
 static int __SDCard_wait_response(uint8_t no_response, int attempts)
 {
+    struct SPI *spi = ctx->spi;
     uint8_t response;
     do {
-        response = SPI_receive_byte();
+        response = SPI(receive_byte)(spi);
     } while ((response == no_response) && 0 < --attempts);
     return response;
 }
 
 static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
 {
+    struct SPI *spi = ctx->spi;
     uint8_t buf[6];
     uint8_t response;
 
@@ -144,9 +152,9 @@ static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
     buf[4] = (argument >>  0) & 0xff;
     buf[5] = SDCard_crc(buf, 5) | 0x01;
 
-    SPI_begin_transaction();
-    SPI_dummy_clocks(1);
-    SPI_send(buf, 6);
+    SPI(begin_transaction)(spi);
+    SPI(dummy_clocks)(spi, 1);
+    SPI(send)(spi, buf, 6);
 
     response = __SDCard_wait_response(0xff, ctx->timeout);
     *r1 = response;
@@ -159,6 +167,7 @@ static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
 
 int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
 {
+    struct SPI *spi = ctx->spi;
     int result;
     uint8_t response;
     uint16_t crc, resp_crc;
@@ -186,18 +195,18 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
 
     crc = 0;
     for (int i = 0; i < offs; i++) {
-        response = SPI_receive_byte();
+        response = SPI(receive_byte)(spi);
         crc = __SDCard_crc16(crc, &response, 1);
     }
-    SPI_receive(buf, count);
+    SPI(receive)(spi, buf, count);
     crc = __SDCard_crc16(crc, buf, count);
     for (int i = 0; i < 512 - offs - count; i++) {
-        response = SPI_receive_byte();
+        response = SPI(receive_byte)(spi);
         crc = __SDCard_crc16(crc, &response, 1);
     }
 
-    resp_crc = SPI_receive_byte() << 8;
-    resp_crc |= SPI_receive_byte();
+    resp_crc = SPI(receive_byte)(spi) << 8;
+    resp_crc |= SPI(receive_byte)(spi);
     if (resp_crc != crc) {
         dprintf(("SD Card: read512: CRC error (%04x != %04x, retry=%d)\n\r",
                  crc, resp_crc, retry));
@@ -218,6 +227,7 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
 
 int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
 {
+    struct SPI *spi = ctx->spi;
     int result;
     uint8_t response;
     uint16_t crc;
@@ -244,14 +254,14 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
     }
 
     response = 0xfe;
-    SPI_send(&response, 1);
-    SPI_dummy_clocks(offs);
-    SPI_send(buf, count);
-    SPI_dummy_clocks(512 - offs - count);
+    SPI(send)(spi, &response, 1);
+    SPI(dummy_clocks)(spi, offs);
+    SPI(send)(spi, buf, count);
+    SPI(dummy_clocks)(spi, 512 - offs - count);
     response = (crc >> 8) & 0xff;
-    SPI_send(&response, 1);
+    SPI(send)(spi, &response, 1);
     response = crc & 0xff;
-    SPI_send(&response, 1);
+    SPI(send)(spi, &response, 1);
 
     response = __SDCard_wait_response(0xff, 3000);
     if (response == 0xff) {
@@ -291,6 +301,7 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
 
 int SDCard_command(uint8_t command, uint32_t argument, void *response_buffer, int length)
 {
+    struct SPI *spi = ctx->spi;
     int result;
     uint8_t *responsep = (uint8_t*)response_buffer;
 
@@ -300,7 +311,7 @@ int SDCard_command(uint8_t command, uint32_t argument, void *response_buffer, in
         return result;
     }
 
-    SPI_receive(&responsep[1], length - 1);
+    SPI(receive)(spi, &responsep[1], length - 1);
     SDCard_end_transaction();
 
     return SDCARD_SUCCESS;
