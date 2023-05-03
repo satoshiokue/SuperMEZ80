@@ -29,12 +29,16 @@ https://github.com/hanyazou/SuperMEZ80-SPI/schematic.pdf
 * macOSかLinuxでビルドできます
 * PIC18用のコンパイラ(XC8)を使います
 * FatFsライブラリが必要です
-* ソースコードを用意して、環境にあわせてMakefileを修正してください。
+* ソースコードを用意して、環境にあわせてMakefileを修正してください
+* make を実行すると、PIC に書き込み可能なbuild/supermez80.hexが作成されます
 ```
 % git clone https://github.com/hanyazou/FatFs
 % git clone https://github.com/hanyazou/SuperMEZ80
 % cd SuperMEZ80
 % make
+
+% ls -l build/supermez80.hex 
+-rw-r--r--  1 hanyazou  staff  197524 May  3 11:03 build/supermez80.hex
 ```
 
 ## PICプログラムの書き込み
@@ -50,10 +54,10 @@ SuperMEZ80-SPI用のファームウェアでは、rom[]に小さなプログラ�
 
 SDカードのディスクイメージは、
 SDカードにCPMDISKSというフォルダを作成し、
-このプロジェクトのcpm2/drivea.dskをコピーしておきます。
+ファームウェアをビルドしてできたbuild/drivea.dskをコピーしておきます。
 
 ### ディスクイメージの修正について
-cpm2/drivea.dskは、z80packのCP/M 2.2用起動ディスクを修正したものです。
+build/drivea.dskは、z80packのCP/M 2.2用起動ディスクを修正したものです。
 ディスクの読み書きをDMAでなく、プログラムI/Oに変更しています。
 I/O expanderを使用できない場合は、CP/Mの起動にこのプログラムI/Oの修正が必要です。
 具体的な修正内容は、同じフォルダのboot.asm, bios.asmの履歴を参照してください。

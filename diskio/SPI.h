@@ -86,35 +86,4 @@ uint8_t SPI1_receive_byte(struct SPI *ctx_);
 void SPI1_select(struct SPI *ctx_, int select);
 extern struct SPI *SPI1_ctx;
 
-static inline void SPI_begin(void) {
-    SPI0_begin(SPI0_ctx);
-}
-static inline void SPI_configure(uint16_t clock_delay, uint8_t bitOrder, uint8_t dataMode) {
-    SPI0_configure(SPI0_ctx, clock_delay, bitOrder, dataMode);
-}
-static inline void SPI_begin_transaction(void) {
-    SPI0_begin_transaction(SPI0_ctx);
-}
-static inline uint8_t SPI_transfer_byte(uint8_t output) {
-    return SPI0_transfer_byte(SPI0_ctx, output);
-}
-static inline void SPI_transfer(void *buf, int count) {
-    SPI0_transfer(SPI0_ctx, buf, count);
-}
-static inline void SPI_send(void *buf, int count) {
-    SPI0_send(SPI0_ctx, buf, count);
-}
-static inline void SPI_receive(void *buf, int count) {
-    SPI0_receive(SPI0_ctx, buf, count);
-}
-static inline void SPI_end_transaction(void) {
-    SPI0_end_transaction(SPI0_ctx);
-}
-static inline void SPI_dummy_clocks(int clocks) {
-    SPI0_dummy_clocks(SPI0_ctx, clocks);
-}
-static inline uint8_t SPI_receive_byte(void) {
-    return SPI0_receive_byte(SPI0_ctx);
-}
-
 #endif  // __SPI_H__

@@ -21,11 +21,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __DISAS_Z80_H__
-#define __DISAS_Z80_H__
-
 #include <stdio.h>
-#include <disas.h>
+#include <disas_z80.h>
 
 const disas_inst_desc_t disas_z80[] = {
     { DISAS_OPERAND_0,  0x00,	"NOP"           },
@@ -302,5 +299,3 @@ const disas_inst_desc_t disas_z80[] = {
 
     { DISAS_END }
 };
-
-#endif  // __DISAS_Z80_H__
