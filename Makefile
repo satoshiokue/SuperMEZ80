@@ -27,7 +27,7 @@ HDRS := $(SRC_DIR)/supermez80.h $(SRC_DIR)/picconfig.h \
         $(BUILD_DIR)/ipl.inc $(BUILD_DIR)/nmimon.inc \
         $(BUILD_DIR)/rstmon.inc $(BUILD_DIR)/mmu_exercise.inc 
 
-all: $(BUILD_DIR)/supermez80.hex $(CPM2_DIR)/drivea.dsk
+all: $(BUILD_DIR)/supermez80.hex $(BUILD_DIR)/drivea.dsk
 
 $(BUILD_DIR)/supermez80.hex: $(SRCS) $(FATFS_SRCS) $(DISK_SRCS) $(HDRS)
 	cd $(BUILD_DIR) && \
@@ -35,14 +35,14 @@ $(BUILD_DIR)/supermez80.hex: $(SRCS) $(FATFS_SRCS) $(DISK_SRCS) $(HDRS)
 
 $(BUILD_DIR)/%.inc: $(SRC_DIR)/%.z80
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && \
-        sjasmplus --lst=%*.lst --raw=%*.bin $< && \
-        cat %*.bin | xxd -i > $@
+        sjasmplus --lst=$*.lst --raw=$*.bin $< && \
+        cat $*.bin | xxd -i > $@
 
 $(BUILD_DIR)/%.bin: $(CPM2_DIR)/%.asm $(BUILD_DIR)
 	mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && \
-        sjasmplus --raw=%*.bin %<
+        sjasmplus --raw=$*.bin $<
 
-$(BUILD_DIR)/drivea.dsk: $(CPM2_DIR)/boot.bin $(CPM2_DIR)/bios.bin
+$(BUILD_DIR)/drivea.dsk: $(BUILD_DIR)/boot.bin $(BUILD_DIR)/bios.bin
 	cd $(BUILD_DIR); \
 	dd if=$(CPM2_DIR)/z80pack-cpm2-1.dsk of=drivea.dsk bs=128; \
 	dd if=boot.bin of=drivea.dsk bs=128 seek=0  count=1 conv=notrunc; \
