@@ -74,6 +74,7 @@ void main(void)
 
     ioexp_init();
     mem_init();
+    mon_init();
 
 #if !defined(CPM_MMU_EXERCISE)
     if (disk_init() < 0)
