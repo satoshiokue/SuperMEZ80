@@ -84,6 +84,8 @@
 #define MON_RESTORE      171    // clean up monitor mode
 #define MON_BREAK        172    // hit break point
 
+#define MMU_INVALID_BANK 0xff
+
 //
 // Type definitions
 //

@@ -39,7 +39,7 @@ static const unsigned char nmimon[] = {
 static const unsigned char *nmi_hook = &nmimon[NMI_ENTRY];
 static const uint16_t nmi_hook_stack = sizeof(nmimon);
 static unsigned char nmi_hook_saved[NMI_HOOK_SIZE];
-static uint8_t nmi_hook_installed = 0;
+static int nmi_hook_installed = MMU_INVALID_BANK;
 
 static const unsigned char rstmon[] = {
 // break point interrupt entry at 0x0008
@@ -50,7 +50,7 @@ static const unsigned char rstmon[] = {
 static const unsigned char *rst_hook = &rstmon[RST_ENTRY];
 static const uint16_t rst_hook_stack = sizeof(rstmon);
 static unsigned char rst_hook_saved[RST_HOOK_SIZE];
-static uint8_t rst_hook_installed = 0;
+static int rst_hook_installed = MMU_INVALID_BANK;
 
 // Saved Z80 Context
 struct z80_context_s {
@@ -111,11 +111,44 @@ void mon_show_registers(void)
     printf("\n\r");
 }
 
+static void uninstall_nmi_hook(void)
+{
+    if (nmi_hook_installed == MMU_INVALID_BANK)
+        return;
+    dma_write_to_sram(bank_phys_addr(nmi_hook_installed,NMI_ENTRY), nmi_hook_saved, NMI_HOOK_SIZE);
+    nmi_hook_installed = MMU_INVALID_BANK;
+}
+
+static void install_nmi_hook(int bank)
+{
+    if (nmi_hook_installed != MMU_INVALID_BANK) {
+        uninstall_nmi_hook();
+    }
+    dma_read_from_sram(bank_phys_addr(bank, NMI_ENTRY), nmi_hook_saved, NMI_HOOK_SIZE);
+    dma_write_to_sram(bank_phys_addr(bank, NMI_ENTRY), nmi_hook, NMI_HOOK_SIZE);
+    nmi_hook_installed = bank;
+}
+
+static void uninstall_rst_hook(void)
+{
+    if (rst_hook_installed == MMU_INVALID_BANK)
+        return;
+    dma_write_to_sram(bank_phys_addr(rst_hook_installed,RST_ENTRY), rst_hook_saved, RST_HOOK_SIZE);
+    rst_hook_installed = MMU_INVALID_BANK;
+}
+
+static void install_rst_hook(int bank)
+{
+    if (rst_hook_installed != MMU_INVALID_BANK)
+        uninstall_rst_hook();
+    dma_read_from_sram(bank_phys_addr(bank, RST_ENTRY), rst_hook_saved, RST_HOOK_SIZE);
+    dma_write_to_sram(bank_phys_addr(bank, RST_ENTRY), rst_hook, RST_HOOK_SIZE);
+    rst_hook_installed = bank;
+}
+
 void mon_setup(void)
 {
-    dma_read_from_sram(phys_addr(NMI_ENTRY), nmi_hook_saved, NMI_HOOK_SIZE);
-    dma_write_to_sram(phys_addr(NMI_ENTRY), nmi_hook, NMI_HOOK_SIZE);
-    nmi_hook_installed = 1;
+    install_nmi_hook(mmu_bank);
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 0);
 }
 
@@ -471,6 +504,7 @@ void mon_breakpoint(char *args[])
             // clear previous break point if it exist
             dma_write_to_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
             mon_bp_installed = 0;
+            uninstall_rst_hook();
         }
 
         mon_bp_addr = strtoul(args[0], &p, 16);  // new break point address
@@ -480,9 +514,7 @@ void mon_breakpoint(char *args[])
         dma_read_from_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
         dma_write_to_sram(phys_addr(mon_bp_addr), rst08, 1);
         mon_bp_installed = 1;
-        dma_read_from_sram(phys_addr(RST_ENTRY), rst_hook_saved, RST_HOOK_SIZE);
-        dma_write_to_sram(phys_addr(RST_ENTRY), rst_hook, RST_HOOK_SIZE);
-        rst_hook_installed = 1;
+        install_rst_hook(mmu_bank);
     } else {
         if (mon_bp_installed) {
             printf("Breakpoint is %04X\n\r", mon_bp_addr);
@@ -498,8 +530,7 @@ void mon_clear_breakpoint()
         printf("Clear breakpoint at %04X\n\r", mon_bp_addr);
         dma_write_to_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
         mon_bp_installed = 0;
-        dma_write_to_sram(phys_addr(RST_ENTRY), rst_hook_saved, RST_HOOK_SIZE);
-        rst_hook_installed = 0;
+        uninstall_rst_hook();
     } else {
         printf("Breakpoint is not set\n\r");
     }
@@ -610,8 +641,10 @@ void mon_restore(void)
     const unsigned int size = sizeof(z80_context.saved_prog);
     uint16_t pc = z80_context.pc - size;
     dma_write_to_sram(phys_addr(pc), &z80_context.saved_prog, size);
-    dma_write_to_sram(phys_addr(NMI_ENTRY), nmi_hook_saved, NMI_HOOK_SIZE);
-    nmi_hook_installed = 0;
+    uninstall_nmi_hook();
+    if (!mon_bp_installed) {
+        uninstall_rst_hook();
+    }
 
     if (mon_step_execution) {
         invoke_monitor = 1;
