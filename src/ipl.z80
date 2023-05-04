@@ -42,7 +42,7 @@ BOOT:
 ;
 ERRMSG:	DEFM	'BOOT: error booting'
 	DEFB	13,10,0
-HLOMSG:	DEFM	'CP/M 2.2 boot-loader for Z80-Simulator'
+HLOMSG:	DEFM	'CP/M boot-loader for Z80-Simulator'
 	DEFB	13,10,0
 ;
 ;	begin the load operation
