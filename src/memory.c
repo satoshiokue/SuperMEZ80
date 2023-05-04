@@ -14,6 +14,7 @@
 int mmu_bank = 0;
 uint32_t mmu_num_banks = 0;
 uint32_t mmu_mem_size = 0;
+void (*mmu_bank_select_callback)(int from, int to) = NULL;
 
 void mem_init()
 {
@@ -252,6 +253,8 @@ void mmu_bank_select(int bank)
         printf("ERROR: bank %d is not available.\n\r", bank);
         invoke_monitor = 1;
     }
+    if (mmu_bank_select_callback)
+        (*mmu_bank_select_callback)(mmu_bank, bank);
     mmu_bank = bank;
     set_bank_pins((uint32_t)mmu_bank << 16);
 }

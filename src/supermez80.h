@@ -84,6 +84,8 @@
 #define MON_RESTORE      171    // clean up monitor mode
 #define MON_BREAK        172    // hit break point
 
+#define MMU_INVALID_BANK 0xff
+
 //
 // Type definitions
 //
@@ -118,6 +120,7 @@ extern const int num_drives;
 extern int invoke_monitor;
 extern unsigned int mon_step_execution;
 
+void mon_init(void);
 void mon_setup(void);
 void mon_enter(int nmi);
 int mon_prompt(void);
@@ -128,8 +131,11 @@ void mon_restore(void);
 extern int mmu_bank;
 extern uint32_t mmu_num_banks;
 extern uint32_t mmu_mem_size;
+extern void (*mmu_bank_select_callback)(int from, int to);
 
 extern void mem_init(void);
+#define bank_phys_addr(bank, addr) (((uint32_t)(bank) << 16) + (addr))
+#define phys_addr(addr) bank_phys_addr(mmu_bank, (addr))
 extern void set_bank_pins(uint32_t addr);
 extern void dma_acquire_addrbus(uint32_t addr);
 extern void dma_release_addrbus(void);
