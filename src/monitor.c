@@ -202,9 +202,9 @@ void mon_enter(int nmi)
         disas_ops(disas_z80, phys_addr(mon_cur_addr), tmp_buf[0], 1, 64, NULL);
     }
 
-    if (!nmi && mon_bp_installed && z80_context.pc == mon_bp_addr + 1) {
-        printf("Break at %04X\n\r", mon_bp_addr);
-        dma_write_to_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
+    if (!nmi && mon_bp_installed && z80_context.pc == (mon_bp_addr & 0xffff) + 1) {
+        printf("Break at %04X\n\r", (uint16_t)(mon_bp_addr & 0xffff));
+        dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
         z80_context.pc--;
         mon_bp_installed = 0;
         mon_cur_addr = mon_bp_addr;
@@ -515,22 +515,22 @@ void mon_breakpoint(char *args[])
         // break point address specified
         if (mon_bp_installed) {
             // clear previous break point if it exist
-            dma_write_to_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
+            dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
             mon_bp_installed = 0;
             uninstall_rst_hook();
         }
 
         mon_bp_addr = strtoul(args[0], &p, 16);  // new break point address
-        printf("Set breakpoint at %04X\n\r", mon_bp_addr);
+        printf("Set breakpoint at %04lX\n\r", mon_bp_addr);
 
         // save and replace the instruction at the break point with RST instruction
-        dma_read_from_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
-        dma_write_to_sram(phys_addr(mon_bp_addr), rst08, 1);
+        dma_read_from_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
+        dma_write_to_sram(mon_bp_addr, rst08, 1);
         mon_bp_installed = 1;
         install_rst_hook(mmu_bank);
     } else {
         if (mon_bp_installed) {
-            printf("Breakpoint is %04X\n\r", mon_bp_addr);
+            printf("Breakpoint is %04lX\n\r", mon_bp_addr);
         } else {
             printf("Breakpoint is not set\n\r");
         }
@@ -540,8 +540,8 @@ void mon_breakpoint(char *args[])
 void mon_clear_breakpoint()
 {
     if (mon_bp_installed) {
-        printf("Clear breakpoint at %04X\n\r", mon_bp_addr);
-        dma_write_to_sram(phys_addr(mon_bp_addr), &mon_bp_saved_inst, 1);
+        printf("Clear breakpoint at %04lX\n\r", mon_bp_addr);
+        dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
         mon_bp_installed = 0;
         uninstall_rst_hook();
     } else {
