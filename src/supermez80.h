@@ -87,6 +87,7 @@
 
 #define MON_CMD_OK   0
 #define MON_CMD_EXIT 1
+#define MON_CMD_ERROR -1
 
 //
 // Type definitions

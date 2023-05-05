@@ -29,6 +29,7 @@
 #include <utils.h>
 #include <disas.h>
 #include <disas_z80.h>
+#include <SDCard.h>
 
 static const unsigned char nmimon[] = {
 // NMI entry at 0x0066
@@ -70,6 +71,8 @@ int invoke_monitor = 0;
 unsigned int mon_step_execution = 0;
 static struct z80_context_s z80_context;
 static uint32_t mon_cur_addr = 0;
+static uint32_t mon_cur_drive = 0;
+static uint32_t mon_cur_lba = 0;
 static uint32_t mon_bp_addr;
 static uint8_t mon_bp_installed = 0;
 static uint8_t mon_bp_saved_inst;
@@ -289,31 +292,36 @@ void edit_line(char *line, int maxlen, int start, int pos)
     }
 }
 
-int mon_cmd_help(char *args[]);
-int mon_cmd_dump(char *args[]);
-int mon_cmd_disassemble(char *args[]);
-int mon_cmd_step(char *args[]);
-int mon_cmd_status(char *args[]);
-int mon_cmd_breakpoint(char *args[]);
-int mon_cmd_clearbreakpoint(char *args[]);
-int mon_cmd_continue(char *args[]);
-int mon_cmd_reset(char *args[]);
-int mon_cmd_set(char *args[]);
+int mon_cmd_help(int argc, char *args[]);
+int mon_cmd_dump(int argc, char *args[]);
+int mon_cmd_disassemble(int argc, char *args[]);
+int mon_cmd_diskread(int argc, char *args[]);
+int mon_cmd_sdread(int argc, char *args[]);
+int mon_cmd_step(int argc, char *args[]);
+int mon_cmd_status(int argc, char *args[]);
+int mon_cmd_breakpoint(int argc, char *args[]);
+int mon_cmd_clearbreakpoint(int argc, char *args[]);
+int mon_cmd_continue(int argc, char *args[]);
+int mon_cmd_reset(int argc, char *args[]);
+int mon_cmd_set(int argc, char *args[]);
 
-#define MON_MAX_ARGS 2
+#define MON_MAX_ARGS 4
 #define MON_STR_ARG1 (1 << 0)
 static const struct {
     const char *name;
     uint8_t nargs;
-    int (*function)(char *args[]);
+    int (*function)(int argc, char *args[]);
     unsigned int flags;
 } mon_cmds[] = {
     { "breakpoint",     1, mon_cmd_breakpoint        },
     { "clearbreakpoint",0, mon_cmd_clearbreakpoint   },
     { "continue",       0, mon_cmd_continue          },
     { "disassemble",    2, mon_cmd_disassemble       },
+    { "di",             2, mon_cmd_disassemble       },
+    { "diskread",       4, mon_cmd_diskread          },
     { "dump",           2, mon_cmd_dump              },
     { "reset",          0, mon_cmd_reset             },
+    { "sdread",         2, mon_cmd_sdread            },
     { "set",            2, mon_cmd_set,              MON_STR_ARG1   },
     { "step",           1, mon_cmd_step              },
     { "status",         0, mon_cmd_status            },
@@ -372,21 +380,21 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
     int match_idx;
     static int last_command_idx = -1;
     unsigned int cmd_idx;
+    int i;
 
-    for (int i = 0; i < MON_MAX_ARGS; i++)
+    for (i = 0; i < MON_MAX_ARGS; i++)
         args[i] = NULL;
 
     mon_remove_space(&line);
     if (*line == '\0' && 0 < last_command_idx) {
         *command = last_command_idx;
-        printf("\r%s%s", mon_prompt_str, mon_cmds[last_command_idx].name);
+        printf("\r%s%s\n\r", mon_prompt_str, mon_cmds[last_command_idx].name);
         return 0;
     }
     last_command_idx = -1;
 
     // Search command in the command table
     for (cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
-        int i;
         for (i = 0; line[i] && line[i] != ' '; i++) {
             if (line[i] <= 'z' && line[i] != mon_cmds[cmd_idx].name[i] &&
                 line[i] - ('A' - 'a') != mon_cmds[cmd_idx].name[i]) {
@@ -408,12 +416,12 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
         printf("not match: %s\n\r", line);
         #endif
         printf("Unknown command: %s\n\r", line);
-        return 1;
+        return -1;
     }
     if (1 < nmatches){
         // Ambiguous command
         printf("Ambiguous command %s\n\r", line);
-        return 2;
+        return -2;
     }
     // Read command name
     while (*line != '\0' && *line != ' ')
@@ -421,7 +429,7 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
     mon_remove_space(&line);
 
     // Read command arguments
-    for (int i = 0; i < mon_cmds[match_idx].nargs; i++) {
+    for (i = 0; i < mon_cmds[match_idx].nargs; i++) {
         mon_remove_space(&line);
         args[i] = line;
         if (i == 0 && (mon_cmds[match_idx].flags & MON_STR_ARG1)) {
@@ -445,15 +453,16 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
     if (*line != '\0') {
         // Some garbage found
         printf("Invalid argument: '%s'\n\r", line);
-        return 3;
+        return -3;
     }
 
     *command = match_idx;
     last_command_idx = match_idx;
-    return 0;
+
+    return i;  // number of arguments
 }
 
-int mon_cmd_help(char *args[])
+int mon_cmd_help(int argc, char *args[])
 {
     for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
         printf("%s\n\r", mon_cmds[cmd_idx].name);
@@ -461,7 +470,7 @@ int mon_cmd_help(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_dump(char *args[])
+int mon_cmd_dump(int argc, char *args[])
 {
     uint32_t addr = mon_cur_addr;
     unsigned int len = 64;
@@ -490,7 +499,7 @@ int mon_cmd_dump(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_disassemble(char *args[])
+int mon_cmd_disassemble(int argc, char *args[])
 {
     uint32_t addr = mon_cur_addr;
     unsigned int len = 32;
@@ -523,7 +532,92 @@ int mon_cmd_disassemble(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_step(char *args[])
+int mon_cmd_diskread(int argc, char *args[])
+{
+    int i;
+    int drive = mon_cur_drive;
+    static int track = 0;
+    static int sector = 0;
+    unsigned int len = 1;
+    uint8_t update_lba = 0;
+    uint32_t lba = mon_cur_lba;
+
+    if (argc == 0) {
+        // use current driver and lba if no argument specified
+    } else
+    if (argc == 1 && *args[0] != '\0') {
+        // use the first argument as lba if only one argument specified
+        lba = strtoul(args[0], NULL, 10);
+    } else {
+        if (*args[0] != '\0')
+            drive = strtoul(args[0], NULL, 10);
+        if (*args[1] != '\0') {
+            update_lba = 1;
+            track = strtoul(args[1], NULL, 10);
+        }
+        if (argc == 2) {
+            update_lba = 0;
+            if (*args[1] != '\0') {
+                lba = track;
+            }
+        }
+        if (2 < argc && *args[2] != '\0') {
+            update_lba = 1;
+            sector = strtoul(args[2], NULL, 10);
+        }
+        if (3 < argc && *args[3] != '\0')
+            len = strtoul(args[3], NULL, 10);
+    }
+    mon_cur_drive = drive;
+
+    if (update_lba && cpm_trsect_to_lba(drive, track, sector, &lba) != 0) {
+        return MON_CMD_ERROR;
+    }
+
+    for (i = 0; i < len; i++) {
+        if (cpm_trsect_from_lba(drive, &track, &sector, lba) ||
+            cpm_disk_read(drive, lba, tmp_buf[0], 1) != 1) {
+            printf("DISK:  read D/T/S=%d/%3d/%3d x%3d=%5ld: ERROR\n\r",
+                   drive, track, sector, drives[drive].sectors, lba);
+            return MON_CMD_ERROR;
+        }
+        printf("DISK:  read D/T/S=%d/%3d/%3d x%3d=%5ld: OK\n\r",
+               drive, track, sector, drives[drive].sectors, lba);
+        util_hexdump("", tmp_buf[0], SECTOR_SIZE);
+        lba++;
+        mon_cur_lba = lba;
+    }
+
+    return MON_CMD_OK;
+}
+
+int mon_cmd_sdread(int argc, char *args[])
+{
+    int i;
+    static uint32_t lba = 0;
+    int count = 1;
+
+    if (0 < argc && *args[0] != '\0') {
+        lba = strtoul(args[0], NULL, 10);
+    }
+    if (1 < argc && *args[1] != '\0') {
+        count = strtoul(args[1], NULL, 10);
+    }
+
+    for (i = 0; i < count; i++) {
+        if (SDCard_read512(lba, 0, tmp_buf[0], 512) != SDCARD_SUCCESS) {
+            printf("SD Card:  read512: sector=%ld: ERROR\n\r", lba);
+            return MON_CMD_ERROR;
+        }
+        printf("SD Card:  read512: sector=%ld: OK\n\r", lba);
+        util_hexdump("", tmp_buf[0], 512);
+        lba++;
+    }
+
+    return MON_CMD_OK;
+}
+
+int mon_cmd_step(int argc, char *args[])
 {
     if (args[0] != NULL && *args[0] != '\0') {
         mon_step_execution = strtoul(args[0], NULL, 16);
@@ -533,7 +627,7 @@ int mon_cmd_step(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_status(char *args[])
+int mon_cmd_status(int argc, char *args[])
 {
     uint16_t sp = z80_context.sp;
     uint16_t pc = z80_context.pc;
@@ -555,7 +649,7 @@ int mon_cmd_status(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_breakpoint(char *args[])
+int mon_cmd_breakpoint(int argc, char *args[])
 {
     uint8_t rst08[] = { 0xcf };
     char *p;
@@ -587,7 +681,7 @@ int mon_cmd_breakpoint(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_clearbreakpoint(char *args[])
+int mon_cmd_clearbreakpoint(int argc, char *args[])
 {
     if (mon_bp_installed) {
         printf("Clear breakpoint at %04lX\n\r", mon_bp_addr);
@@ -600,19 +694,19 @@ int mon_cmd_clearbreakpoint(char *args[])
     return MON_CMD_OK;
 }
 
-int mon_cmd_continue(char *args[])
+int mon_cmd_continue(int argc, char *args[])
 {
     // "continue" means to exit the monitor and continue running the Z80
     return MON_CMD_EXIT;
 }
 
-int mon_cmd_reset(char *args[])
+int mon_cmd_reset(int argc, char *args[])
 {
     RESET();
     // no return
 }
 
-int mon_cmd_set(char *args[])
+int mon_cmd_set(int argc, char *args[])
 {
     unsigned int i;
     static const struct {
@@ -661,6 +755,7 @@ int mon_cmd_set(char *args[])
 int mon_prompt(void)
 {
     char line[32];
+    int argc;
     char *args[MON_MAX_ARGS];
     const int prompt_len = strlen(mon_prompt_str);
     char* input = &line[prompt_len];
@@ -675,10 +770,8 @@ int mon_prompt(void)
     #endif
 
     int command;
-    uint16_t arg1;
-    uint16_t arg2;
-
-    if (mon_parse(input, &command, args)) {
+    argc = mon_parse(input, &command, args);
+    if (argc < 0) {
         printf("type 'help' to see the list of available commands\n\r");
         return 0;
     }
@@ -691,10 +784,14 @@ int mon_prompt(void)
         else
             printf("  null");
     }
-    printf("\n\r");
+    printf(" (argc=%d)\n\r", argc);
     #endif
 
-    return mon_cmds[command].function(args);
+    int result = mon_cmds[command].function(argc, args);
+    if (result == MON_CMD_ERROR) {
+        printf("Error\n\r");
+    }
+    return result;
 }
 
 void mon_leave(void)
