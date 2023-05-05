@@ -117,6 +117,64 @@ void hw_ctrl_write(uint8_t val)
     }
 }
 
+int cpm_disk_read(int drive, uint32_t lba, void *buf, int sectors)
+{
+    unsigned int n;
+    int result = 0;
+    int track, sector;
+
+    if (num_drives <= drive || drives[drive].filep == NULL) {
+        printf("invalid drive %d\n\r", drive);
+        return -1;
+    }
+
+    FIL *filep = drives[drive].filep;
+    if (f_lseek(filep, lba * SECTOR_SIZE) != FR_OK) {
+        printf("f_lseek(): ERROR\n\r");
+        return -1;
+    }
+    while (result < sectors) {
+        if (f_read(filep, buf, SECTOR_SIZE, &n) != FR_OK) {
+            printf("f_read(): ERROR\n\r");
+            return result;
+        }
+        buf = (void*)((uint8_t*) + SECTOR_SIZE);
+        lba++;
+        result++;
+    }
+    return result;
+}
+
+int cpm_trsect_to_lba(int drive, int track, int sector, uint32_t *lba)
+{
+    if (lba)
+        *lba = 0xdeadbeefUL;  // fail safe
+    if (num_drives <= drive || drives[drive].filep == NULL) {
+        printf("invalid drive %d\n\r", drive);
+        return -1;
+    }
+    if (lba)
+        *lba = track * drives[drive].sectors + sector - 1;
+    return 0;
+}
+
+int cpm_trsect_from_lba(int drive, int *track, int *sector, uint32_t lba)
+{
+    if (track)
+        *track = 0xdead;  // fail safe
+    if (sector)
+        *sector = 0xbeef;  // fail safe
+    if (num_drives <= drive || drives[drive].filep == NULL) {
+        printf("invalid drive %d\n\r", drive);
+        return -1;
+    }
+    if (track)
+        *track =  lba / drives[drive].sectors;
+    if (sector)
+        *sector = lba % drives[drive].sectors + 1;
+    return 0;
+}
+
 // Called at UART3 receiving some data
 void __interrupt(irq(default),base(8)) Default_ISR(){
     GIE = 0;                    // Disable interrupt

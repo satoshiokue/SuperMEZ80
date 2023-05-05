@@ -125,6 +125,9 @@ void bus_master(int enable);
 // io
 extern drive_t drives[];
 extern const int num_drives;
+extern int cpm_disk_read(int drive, uint32_t lba, void *buf, int sectors);
+extern int cpm_trsect_to_lba(int drive, int track, int sector, uint32_t *lba);
+extern int cpm_trsect_from_lba(int drive, int *track, int *sector, uint32_t lba);
 
 // monitor
 extern int invoke_monitor;
