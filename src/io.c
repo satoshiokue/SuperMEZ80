@@ -206,8 +206,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             LATC = *disk_datap++;
         } else {
             #ifdef CPM_DISK_DEBUG
-            printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x (READ IGNORED)\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (READ IGNORED)\n\r",
+                   disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
             #endif
         }
         break;
@@ -261,8 +261,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             }
         } else {
             #ifdef CPM_DISK_DEBUG
-            printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x DATA=%02x (IGNORED)\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
+            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
+                   disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
             #endif
         }
         break;
@@ -286,7 +286,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             do_bus_master = 1;
         }
         #ifdef CPM_DISK_DEBUG_VERBOSE
-        printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ...\n\r", disk_op,
+        printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x ... \n\r", disk_op,
                disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
         #endif
         break;
@@ -346,7 +346,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case MON_ENTER:
     case MON_BREAK:
         mon_enter(io_addr == MON_ENTER /* NMI or not*/);
-        while (!mon_step_execution && !mon_prompt());
+        while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
         goto io_exit;
     case MON_RESTORE:
@@ -364,12 +364,13 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, 0);
     #endif
 
+    uint32_t sector = 0;
     if (num_drives <= disk_drive || drives[disk_drive].filep == NULL) {
         disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
 
-    uint32_t sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
+    sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
     FIL *filep = drives[disk_drive].filep;
     unsigned int n;
     if (f_lseek(filep, sector * SECTOR_SIZE) != FR_OK) {
@@ -457,8 +458,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
  disk_io_done:
     #ifdef CPM_DISK_DEBUG
-    printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
-           disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, disk_stat);
+    printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
+           disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
+           disk_dmah, disk_dmal, disk_stat);
     #endif
 
     #ifdef GPIO_LED
