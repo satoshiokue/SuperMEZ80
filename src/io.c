@@ -52,7 +52,7 @@ const int num_drives = (sizeof(drives)/sizeof(*drives));
 static uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
 
 // key input buffer
-static char key_input_buffer[8];
+static char key_input_buffer[80];
 static unsigned int key_input = 0;
 static unsigned int key_input_buffer_head = 0;
 
