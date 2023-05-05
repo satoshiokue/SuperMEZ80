@@ -86,6 +86,9 @@
 
 #define MMU_INVALID_BANK 0xff
 
+#define MON_CMD_OK   0
+#define MON_CMD_EXIT 1
+
 //
 // Type definitions
 //

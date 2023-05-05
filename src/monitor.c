@@ -289,29 +289,32 @@ void edit_line(char *line, int maxlen, int start, int pos)
     }
 }
 
+int mon_cmd_help(char *args[]);
+int mon_cmd_dump(char *args[]);
+int mon_cmd_disassemble(char *args[]);
+int mon_cmd_step(char *args[]);
+int mon_cmd_status(char *args[]);
+int mon_cmd_breakpoint(char *args[]);
+int mon_cmd_clearbreakpoint(char *args[]);
+int mon_cmd_continue(char *args[]);
+int mon_cmd_reset(char *args[]);
+
 #define MON_MAX_ARGS 2
 static const struct {
-    uint8_t command;
     const char *name;
     uint8_t nargs;
+    int (*function)(char *args[]);
 } mon_cmds[] = {
-    { 'b', "breakpoint",    1 },
-    { 'C', "clear",         0 },
-    { 'c', "continue",      0 },
-    { 'd', "disassemble",   2 },
-    { 'x', "dump",          2 },
-    { 'r', "reset",         0 },
-    { 'S', "step",          1 },
-    { 's', "status",        0 },
-    { 'h', "help",          0 },
+    { "breakpoint",     1, mon_cmd_breakpoint        },
+    { "clearbreakpoint",0, mon_cmd_clearbreakpoint   },
+    { "continue",       0, mon_cmd_continue          },
+    { "disassemble",    2, mon_cmd_disassemble       },
+    { "dump",           2, mon_cmd_dump              },
+    { "reset",          0, mon_cmd_reset             },
+    { "step",           1, mon_cmd_step              },
+    { "status",         0, mon_cmd_status            },
+    { "help",           0, mon_cmd_help              },
 };
-
-void mon_help(void)
-{
-    for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
-        printf("%s\n\r", mon_cmds[cmd_idx].name);
-    }
-}
 
 void mon_remove_space(char **linep)
 {
@@ -338,7 +341,7 @@ int mon_get_hexval(char **linep)
     return result;
 }
 
-int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
+int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
 {
     int nmatches = 0;
     int match_idx;
@@ -350,7 +353,7 @@ int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
 
     mon_remove_space(&line);
     if (*line == '\0' && 0 < last_command_idx) {
-        *command = mon_cmds[last_command_idx].command;
+        *command = last_command_idx;
         printf("\r%s%s", mon_prompt_str, mon_cmds[last_command_idx].name);
         return 0;
     }
@@ -366,8 +369,12 @@ int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
             }
         }
         if (line[i] == '\0' || line[i] == ' ') {
-            nmatches++;
             match_idx = cmd_idx;
+            if (mon_cmds[cmd_idx].name[i] == '\0') {
+                nmatches = 1;
+                break;
+            }
+            nmatches++;
         }
     }
     if (nmatches < 1){
@@ -411,12 +418,20 @@ int mon_parse(char *line, uint8_t *command, char *args[MON_MAX_ARGS])
         return 3;
     }
 
-    *command = mon_cmds[match_idx].command;
+    *command = match_idx;
     last_command_idx = match_idx;
     return 0;
 }
 
-void mon_dump(char *args[])
+int mon_cmd_help(char *args[])
+{
+    for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
+        printf("%s\n\r", mon_cmds[cmd_idx].name);
+    }
+    return MON_CMD_OK;
+}
+
+int mon_cmd_dump(char *args[])
 {
     uint32_t addr = mon_cur_addr;
     unsigned int len = 64;
@@ -442,9 +457,10 @@ void mon_dump(char *args[])
         addr += n;
     }
     mon_cur_addr = addr;
+    return MON_CMD_OK;
 }
 
-void mon_disas(char *args[])
+int mon_cmd_disassemble(char *args[])
 {
     uint32_t addr = mon_cur_addr;
     unsigned int len = 32;
@@ -474,18 +490,20 @@ void mon_disas(char *args[])
     #ifdef CPM_MON_DEBUG
     printf("mon_cur_addr=%lx\n\r", mon_cur_addr);
     #endif
+    return MON_CMD_OK;
 }
 
-void mon_step(char *args[])
+int mon_cmd_step(char *args[])
 {
     if (args[0] != NULL && *args[0] != '\0') {
         mon_step_execution = strtoul(args[0], NULL, 16);
     } else {
         mon_step_execution = 1;
     }
+    return MON_CMD_OK;
 }
 
-void mon_status(void)
+int mon_cmd_status(char *args[])
 {
     uint16_t sp = z80_context.sp;
     uint16_t pc = z80_context.pc;
@@ -504,9 +522,10 @@ void mon_status(void)
 
     printf("\n\r");
     disas_ops(disas_z80, phys_addr(pc), &tmp_buf[0][pc & 0xf], 16, 16, NULL);
+    return MON_CMD_OK;
 }
 
-void mon_breakpoint(char *args[])
+int mon_cmd_breakpoint(char *args[])
 {
     uint8_t rst08[] = { 0xcf };
     char *p;
@@ -535,9 +554,10 @@ void mon_breakpoint(char *args[])
             printf("Breakpoint is not set\n\r");
         }
     }
+    return MON_CMD_OK;
 }
 
-void mon_clear_breakpoint()
+int mon_cmd_clearbreakpoint(char *args[])
 {
     if (mon_bp_installed) {
         printf("Clear breakpoint at %04lX\n\r", mon_bp_addr);
@@ -547,6 +567,19 @@ void mon_clear_breakpoint()
     } else {
         printf("Breakpoint is not set\n\r");
     }
+    return MON_CMD_OK;
+}
+
+int mon_cmd_continue(char *args[])
+{
+    // "continue" means to exit the monitor and continue running the Z80
+    return MON_CMD_EXIT;
+}
+
+int mon_cmd_reset(char *args[])
+{
+    RESET();
+    // no return
 }
 
 int mon_prompt(void)
@@ -565,20 +598,20 @@ int mon_prompt(void)
     printf("command: %s\n\r", input);
     #endif
 
-    uint8_t command;
+    int command;
     uint16_t arg1;
     uint16_t arg2;
 
     if (mon_parse(input, &command, args)) {
         printf("\n\r");
         printf("unknown command: %s\n\r", input);
-        mon_help();
+        printf("type 'help' to see the list of available commands\n\r");
         return 0;
     }
     printf("\n\r");
 
     #ifdef CPM_MON_DEBUG
-    printf("command: %c", command);
+    printf("command: %s", mon_cmds[command].name);
     for (int i = 0; i < MON_MAX_ARGS; i++) {
         if (args[i])
             printf("  '%s'", args[i]);
@@ -588,36 +621,7 @@ int mon_prompt(void)
     printf("\n\r");
     #endif
 
-    switch (command) {
-    case 'b':
-        mon_breakpoint(args);
-        break;
-    case 'C':
-        mon_clear_breakpoint();
-        break;
-    case 'c':
-        return 1;
-    case 'd':
-        mon_disas(args);
-        break;
-    case 'r':
-        RESET();
-        // no return
-    case 'S':
-        mon_step(args);
-        return 1;
-    case 's':
-        mon_status();
-        break;
-    case 'x':
-        mon_dump(args);
-        break;
-    case 'h':
-        mon_help();
-        break;
-    }
-
-    return 0;
+    return mon_cmds[command].function(args);
 }
 
 void mon_leave(void)
