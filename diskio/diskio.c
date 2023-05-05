@@ -27,13 +27,18 @@
 #include "diskio.h"
 #include "SDCard.h"
 #include "utils.h"
+#include "fatdisk_debug.h"
 
-// #define DEBUG
+#define DEBUG
 #if defined(DEBUG)
-#define dprintf(args) do { printf args; } while(0)
+static int debug_flags = 0;
 #else
-#define dprintf(args) do { } while(0)
+static const int debug_flags = 0;
 #endif
+
+#define dprintf(args) do { if (debug_flags) printf args; } while(0)
+#define drprintf(args) do { if (debug_flags & FATDISK_DEBUG_READ) printf args; } while(0)
+#define dwprintf(args) do { if (debug_flags & FATDISK_DEBUG_WRITE) printf args; } while(0)
 
 #define SECTOR_SIZE 512
 #define INVALID_LBA 0xffffffff
@@ -61,9 +66,8 @@ DSTATUS disk_initialize(BYTE pdrv)
         dprintf(("failed to read sector 0\n\r"));
         return STA_NODISK;
     } else {
-        #ifdef DEBUG
-        util_hexdump("", buf, 128);
-        #endif
+        if (debug_flags)
+            util_hexdump("", buf, 128);
     }
     if (buf[126] != 0x55 || buf[127] != 0xaa) {
         dprintf(("no MBR signature\n\r"));
@@ -106,7 +110,7 @@ DSTATUS disk_status(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 {
-    dprintf(("disk_read: pdrv=%d, sector=%ld, count=%d\n\r", pdrv, sector, count));
+    drprintf(("disk_read: pdrv=%d, sector=%ld, count=%d\n\r", pdrv, sector, count));
 
     for (int i = 0; i < count; i++) {
         if (SDCard_read512(start_lba + sector, 0, buff, SECTOR_SIZE) != SDCARD_SUCCESS) {
@@ -122,7 +126,7 @@ DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 {
-    dprintf(("disk_write: pdrv=%d, sector=%ld, count=%d\n\r", pdrv, sector, count));
+    dwprintf(("disk_write: pdrv=%d, sector=%ld, count=%d\n\r", pdrv, sector, count));
 
     for (int i = 0; i < count; i++) {
         if (SDCard_write512(start_lba + sector, 0, buff, SECTOR_SIZE) != SDCARD_SUCCESS) {
@@ -139,4 +143,13 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
 {
     return RES_ERROR;
+}
+
+int fatdisk_debug(int newval)
+{
+    int res = debug_flags;
+#if defined(DEBUG)
+    debug_flags = newval;
+#endif
+    return res;
 }
