@@ -28,7 +28,7 @@
 
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
-#define NUM_FILES        8
+#define NUM_FILES        6
 #define SECTOR_SIZE      128
 #define TMP_BUF_SIZE     256
 
