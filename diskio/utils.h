@@ -26,6 +26,7 @@
 
 #define UTIL_MIN(a, b) ((a) < (b) ? (a) : (b))
 #define UTIL_MAX(a, b) ((a) > (b) ? (a) : (b))
+#define UTIL_ARRAYSIZEOF(a) (sizeof(a)/sizeof(*(a)))
 
 void util_hexdump(const char *header, void *addr, int size);
 void util_hexdump_sum(const char *header, void *addr, int size);
