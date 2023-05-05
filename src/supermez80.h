@@ -16,8 +16,7 @@
 // Configlations
 //
 
-//#define CPM_DISK_DEBUG
-//#define CPM_DISK_DEBUG_VERBOSE
+#define ENABLE_DISK_DEBUG
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
 //#define CPM_MMU_DEBUG
@@ -107,11 +106,19 @@ typedef struct {
     FIL *filep;
 } drive_t;
 
+typedef struct {
+    uint8_t disk;
+    uint8_t disk_read;
+    uint8_t disk_write;
+    uint8_t disk_verbose;
+} debug_t;
+
 //
 // Global variables and function prototypes
 //
 
 extern uint8_t tmp_buf[2][TMP_BUF_SIZE];
+extern debug_t debug;
 
 void bus_master(int enable);
 
@@ -146,5 +153,20 @@ extern void dma_write_to_sram(uint32_t dest, void *buf, int len);
 extern void dma_read_from_sram(uint32_t src, void *buf, int len);
 extern void mmu_bank_config(int nbanks);
 extern void mmu_bank_select(int bank);
+
+//
+// debug macros
+//
+#ifdef ENABLE_DISK_DEBUG
+#define DEBUG_DISK (debug.disk || debug.disk_read || debug.disk_write || debug.disk_verbose)
+#define DEBUG_DISK_READ (debug.disk_read)
+#define DEBUG_DISK_WRITE (debug.disk_write)
+#define DEBUG_DISK_VERBOSE (debug.disk_verbose)
+#else
+#define DEBUG_DISK 0
+#define DEBUG_READ 0
+#define DEBUG_WRITE 0
+#define DEBUG_DISK_VERBOSE 0
+#endif
 
 #endif  // __SUPERMEZ80_H__

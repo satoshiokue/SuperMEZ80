@@ -298,12 +298,15 @@ int mon_cmd_breakpoint(char *args[]);
 int mon_cmd_clearbreakpoint(char *args[]);
 int mon_cmd_continue(char *args[]);
 int mon_cmd_reset(char *args[]);
+int mon_cmd_set(char *args[]);
 
 #define MON_MAX_ARGS 2
+#define MON_STR_ARG1 (1 << 0)
 static const struct {
     const char *name;
     uint8_t nargs;
     int (*function)(char *args[]);
+    unsigned int flags;
 } mon_cmds[] = {
     { "breakpoint",     1, mon_cmd_breakpoint        },
     { "clearbreakpoint",0, mon_cmd_clearbreakpoint   },
@@ -311,6 +314,7 @@ static const struct {
     { "disassemble",    2, mon_cmd_disassemble       },
     { "dump",           2, mon_cmd_dump              },
     { "reset",          0, mon_cmd_reset             },
+    { "set",            2, mon_cmd_set,              MON_STR_ARG1   },
     { "step",           1, mon_cmd_step              },
     { "status",         0, mon_cmd_status            },
     { "help",           0, mon_cmd_help              },
@@ -322,10 +326,31 @@ void mon_remove_space(char **linep)
         (*linep)++;
 }
 
+void mon_remove_trailing_space(char **linep)
+{
+    while (**linep == ' ')  // Remove trailing white space characters
+        *((*linep)++) = '\0';
+}
+
+int mon_get_str(char **linep)
+{
+    int result = 0;
+
+    while (1) {
+        char c = **linep;
+        if (c == ' ' || c == ',' || c == '\0')
+            break;
+        result++;
+        (*linep)++;
+    }
+    mon_remove_trailing_space(linep);
+
+    return result;
+}
+
 int mon_get_hexval(char **linep)
 {
     int result = 0;
-    mon_remove_space(linep);
 
     while (1) {
         char c = **linep;
@@ -382,13 +407,12 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
         #ifdef CPM_MON_DEBUG
         printf("not match: %s\n\r", line);
         #endif
+        printf("Unknown command: %s\n\r", line);
         return 1;
     }
     if (1 < nmatches){
         // Ambiguous command
-        #ifdef CPM_MON_DEBUG
         printf("Ambiguous command %s\n\r", line);
-        #endif
         return 2;
     }
     // Read command name
@@ -398,7 +422,15 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
 
     // Read command arguments
     for (int i = 0; i < mon_cmds[match_idx].nargs; i++) {
+        mon_remove_space(&line);
         args[i] = line;
+        if (i == 0 && (mon_cmds[match_idx].flags & MON_STR_ARG1)) {
+            if (mon_get_str(&line) == 0 && *line == '\0') {
+                // reach end of the line without any argument
+                args[i] = NULL;
+                break;
+            }
+        } else
         if (mon_get_hexval(&line) == 0 && *line == '\0') {
             // reach end of the line without any argument
             args[i] = NULL;
@@ -412,9 +444,7 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
     }
     if (*line != '\0') {
         // Some garbage found
-        #ifdef CPM_MON_DEBUG
-        printf("Trailing garbage found: '%s'\n\r", line);
-        #endif
+        printf("Invalid argument: '%s'\n\r", line);
         return 3;
     }
 
@@ -582,6 +612,52 @@ int mon_cmd_reset(char *args[])
     // no return
 }
 
+int mon_cmd_set(char *args[])
+{
+    unsigned int i;
+    static const struct {
+        const char *name;
+        uint8_t *ptr;
+    } variables[] = {
+        #ifdef ENABLE_DISK_DEBUG
+        { "debug_disk",         &debug.disk         },
+        { "debug_disk_read",    &debug.disk_read    },
+        { "debug_disk_write",   &debug.disk_write   },
+        { "debug_disk_verbose", &debug.disk_verbose },
+        #endif
+    };
+
+    // show all settings if no arguments specified
+    if (args[0] == NULL || *args[0] == '\0') {
+        for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
+            printf("%s=%d\n\r", variables[i].name, *variables[i].ptr);
+        }
+        return MON_CMD_OK;
+    }
+
+    // search entry of variable
+    for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
+        if (stricmp(variables[i].name, args[0]) == 0)
+            break;
+    }
+
+    // error if no entry is found
+    if (UTIL_ARRAYSIZEOF(variables) <= i) {
+        printf("Unknown variable '%s'\n\r", args[0]);
+        return MON_CMD_OK;
+    }
+
+    // set value to the variable if second argument is specified
+    if (args[1] != NULL && *args[1] != '\0') {
+        *variables[i].ptr = strtoul(args[1], NULL, 16);
+    }
+
+    // show name and value of the variable
+    printf("%s=%d\n\r", variables[i].name, *variables[i].ptr);
+
+    return MON_CMD_OK;
+}
+
 int mon_prompt(void)
 {
     char line[32];
@@ -592,8 +668,8 @@ int mon_prompt(void)
     sprintf(line, mon_prompt_str);
     edit_line(line, sizeof(line), prompt_len, prompt_len);
 
-    #ifdef CPM_MON_DEBUG
     printf("\n\r");
+    #ifdef CPM_MON_DEBUG
     util_hexdump("edit_line: ", line, sizeof(line));
     printf("command: %s\n\r", input);
     #endif
@@ -603,12 +679,9 @@ int mon_prompt(void)
     uint16_t arg2;
 
     if (mon_parse(input, &command, args)) {
-        printf("\n\r");
-        printf("unknown command: %s\n\r", input);
         printf("type 'help' to see the list of available commands\n\r");
         return 0;
     }
-    printf("\n\r");
 
     #ifdef CPM_MON_DEBUG
     printf("command: %s", mon_cmds[command].name);

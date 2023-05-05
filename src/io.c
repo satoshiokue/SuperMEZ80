@@ -27,6 +27,7 @@
 #include <supermez80.h>
 #include <stdio.h>
 #include <ff.h>
+#include <utils.h>
 
 drive_t drives[] = {
     { 26 },
@@ -204,11 +205,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
             LATC = *disk_datap++;
-        } else {
-            #ifdef CPM_DISK_DEBUG
+        } else
+        if (DEBUG_DISK) {
             printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (READ IGNORED)\n\r",
                    disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
-            #endif
         }
         break;
     case DISK_REG_FDCST:
@@ -260,10 +260,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
                 do_bus_master = 1;
             }
         } else {
-            #ifdef CPM_DISK_DEBUG
-            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
-                   disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
-            #endif
+            if (DEBUG_DISK) {
+                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
+                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
+            }
         }
         break;
     case DISK_REG_DRIVE:
@@ -285,10 +285,13 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         } else {
             do_bus_master = 1;
         }
-        #ifdef CPM_DISK_DEBUG_VERBOSE
-        printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x ... \n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
-        #endif
+        if ((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
+            (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) {
+            if (DEBUG_DISK_VERBOSE) {
+                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x ... \n\r", disk_op,
+                       disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            }
+        }
         break;
     case DISK_REG_DMAL:
         disk_dmal = PORTC;
@@ -390,9 +393,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             goto disk_io_done;
         }
 
-        #ifdef CPM_DISK_DEBUG_VERBOSE
-        util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
-        #endif
+        if (DEBUG_DISK_READ && DEBUG_DISK_VERBOSE) {
+            util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
+        }
 
         if (disk_op == DISK_OP_DMA_READ) {
             //
@@ -441,6 +444,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             // writing data 128 bytes are in the buffer already
         }
 
+        if (DEBUG_DISK_WRITE && DEBUG_DISK_VERBOSE) {
+            util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
+        }
+
         // write buffer to the DISK
         if (f_write(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
             printf("f_write(): ERROR\n\r");
@@ -457,11 +464,12 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
  disk_io_done:
-    #ifdef CPM_DISK_DEBUG
-    printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
-           disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
-           disk_dmah, disk_dmal, disk_stat);
-    #endif
+    if ((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
+        (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) {
+        printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
+               disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
+               disk_dmah, disk_dmal, disk_stat);
+    }
 
     #ifdef GPIO_LED
     if (led_on)  // turn off the LED
