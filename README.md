@@ -21,8 +21,7 @@ Z80 Single-Board Computer EMUZ80 と SuperMEZ80-SPI
 ## メザニンボード
 https://github.com/hanyazou/SuperMEZ80-SPI
 
-## 回路図
-https://github.com/hanyazou/SuperMEZ80-SPI/schematic.pdf
+回路図は、上記SuperMEZ80-SPIのschematic.pdfを参照してください。
 
 ## ファームウェア
 
