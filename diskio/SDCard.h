@@ -38,6 +38,10 @@
 #define SDCARD_R1_ADDR_ERR      0x20
 #define SDCARD_R1_PARAM_ERR     0x40
 
+#define SDCARD_DEBUG            (1 << 0)
+#define SDCARD_DEBUG_READ       (1 << 1)
+#define SDCARD_DEBUG_WRITE      (1 << 2)
+
 int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t timeout);
 int SDCard_command(uint8_t command, uint32_t argument, void *response, int length);
 int SDCard_read512(uint32_t addr, int offs, void *buf, int count);
@@ -45,5 +49,6 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count);
 uint8_t SDCard_crc(void *buf, int count);
 uint16_t SDCard_crc16(void *buf, int count);
 uint16_t __SDCard_crc16(uint16_t crc, void *buf, int count);
+int SDCard_debug(int debug);
 
 #endif  // __SDCARD_H__

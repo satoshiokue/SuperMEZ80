@@ -28,12 +28,16 @@
 
 #define SPI_PREFIX SPI0
 
-// #define SDCARD_DEBUG
-#if defined(SDCARD_DEBUG)
-#define dprintf(args) do { printf args; } while(0)
+#define DEBUG
+#if defined(DEBUG)
+static int debug_flags = 0;
 #else
-#define dprintf(args) do { } while(0)
+static const int debug_flags = 0;
 #endif
+
+#define dprintf(args) do { if (debug_flags) printf args; } while(0)
+#define drprintf(args) do { if (debug_flags & SDCARD_DEBUG_READ) printf args; } while(0)
+#define dwprintf(args) do { if (debug_flags & SDCARD_DEBUG_WRITE) printf args; } while(0)
 
 static struct SDCard {
     struct SPI *spi;
@@ -173,6 +177,8 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
     uint16_t crc, resp_crc;
     int retry = 5;
 
+    drprintf(("SD Card:  read512: addr=%8ld, offs=%d, count=%d\n\r", addr, offs, count));
+
  retry:
     result = __SDCard_command_r1(17, addr, &response);
     if (result != SDCARD_SUCCESS) {
@@ -232,6 +238,8 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
     uint8_t response;
     uint16_t crc;
     int retry = 5;
+
+    dwprintf(("SD Card: write512: addr=%8ld, offs=%d, count=%d\n\r", addr, offs, count));
 
     crc = 0;
     response = 0xff;
@@ -356,3 +364,11 @@ uint16_t SDCard_crc16(void *buf, int count)
     return __SDCard_crc16(0, buf, count);
 }
 
+int SDCard_debug(int newval)
+{
+    int res = debug_flags;
+#if defined(DEBUG)
+    debug_flags = newval;
+#endif
+    return res;
+}
