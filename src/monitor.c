@@ -30,6 +30,7 @@
 #include <disas.h>
 #include <disas_z80.h>
 #include <SDCard.h>
+#include <fatdisk_debug.h>
 
 static const unsigned char nmimon[] = {
 // NMI entry at 0x0066
@@ -155,6 +156,53 @@ static void bank_select_callback(int from, int to)
         install_nmi_hook(to);
     if (rst_hook_installed != MMU_INVALID_BANK)
         install_rst_hook(to);
+}
+
+static struct {
+    uint8_t fatdisk;
+    uint8_t fatdisk_read;
+    uint8_t fatdisk_write;
+    uint8_t sdcard;
+    uint8_t sdcard_read;
+    uint8_t sdcard_write;
+} dbg_set;
+
+static void read_debug_settings(void)
+{
+    int v;
+
+    // fatdisk
+    v = fatdisk_debug(0);
+    fatdisk_debug(v);
+    dbg_set.fatdisk = (v & FATDISK_DEBUG) ? 1 : 0;
+    dbg_set.fatdisk_read = (v & FATDISK_DEBUG_READ) ? 1 : 0;
+    dbg_set.fatdisk_write = (v & FATDISK_DEBUG_WRITE) ? 1 : 0;
+
+    // SDCard
+    v = SDCard_debug(0);
+    SDCard_debug(v);
+    dbg_set.sdcard = (v & SDCARD_DEBUG) ? 1 : 0;
+    dbg_set.sdcard_read = (v & SDCARD_DEBUG_READ) ? 1 : 0;
+    dbg_set.sdcard_write = (v & SDCARD_DEBUG_WRITE) ? 1 : 0;
+}
+
+static void write_debug_settings(void)
+{
+    int v;
+
+    // fatdisk
+    v = 0;
+    v |= (dbg_set.fatdisk ? FATDISK_DEBUG : 0);
+    v |= (dbg_set.fatdisk_read ? FATDISK_DEBUG_READ : 0);
+    v |= (dbg_set.fatdisk_write ? FATDISK_DEBUG_WRITE : 0);
+    fatdisk_debug(v);
+
+    // SDCard
+    v = 0;
+    v |= (dbg_set.sdcard ? SDCARD_DEBUG : 0);
+    v |= (dbg_set.sdcard_read ? SDCARD_DEBUG_READ : 0);
+    v |= (dbg_set.sdcard_write ? SDCARD_DEBUG_WRITE : 0);
+    SDCard_debug(v);
 }
 
 void mon_init(void)
@@ -719,7 +767,15 @@ int mon_cmd_set(int argc, char *args[])
         { "debug_disk_write",   &debug.disk_write   },
         { "debug_disk_verbose", &debug.disk_verbose },
         #endif
+        { "debug_fatdisk",      &dbg_set.fatdisk        },
+        { "debug_fatdisk_read", &dbg_set.fatdisk_read   },
+        { "debug_fatdisk_write",&dbg_set.fatdisk_write  },
+        { "debug_sdcard",       &dbg_set.sdcard         },
+        { "debug_sdcard_read",  &dbg_set.sdcard_read    },
+        { "debug_sdcard_write", &dbg_set.sdcard_write   },
     };
+
+    read_debug_settings();
 
     // show all settings if no arguments specified
     if (args[0] == NULL || *args[0] == '\0') {
@@ -744,6 +800,7 @@ int mon_cmd_set(int argc, char *args[])
     // set value to the variable if second argument is specified
     if (args[1] != NULL && *args[1] != '\0') {
         *variables[i].ptr = strtoul(args[1], NULL, 16);
+        write_debug_settings();
     }
 
     // show name and value of the variable
