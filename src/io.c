@@ -289,21 +289,24 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     }
 
-    // Release wait (D-FF reset)
-    G3POL = 1;
+    // Assert /NMI for invoking the monitor before releasing /WAIT.
+    // You can use SPI bus because Z80 is in I/O read instruction and does not drive D0~7 here.
+    if (invoke_monitor) {
+        mon_assert_nmi();
+    }
+
+    // Let Z80 read the data
+    LATE0 = 0;                  // /BUSREQ is active
+    G3POL = 1;                  // Release wait (D-FF reset)
     G3POL = 0;
-
-    // Post processing
-#if 1
-    while(!RA0);                // /IORQ <5.6MHz
-#else
-    while(!RD7);                // /WAIT >=5.6MHz
-#endif
+    while(!RA0);                // /IORQ
     TRISC = 0xff;               // Set as input
-    CLC3IF = 0;                 // Clear interrupt flag
 
-    GIE = 1;                    // Enable interrupt
-    return;
+    if (invoke_monitor) {
+        goto enter_bus_master;
+    } else {
+        goto exit_wait;
+    }
 
  io_write:
     // Z80 IO write cycle
@@ -382,12 +385,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     }
     if (!do_bus_master && !invoke_monitor) {
-        // Release wait (D-FF reset)
-        G3POL = 1;
-        G3POL = 0;
-        CLC3IF = 0;         // Clear interrupt flag
-        GIE = 1;            // Enable interrupt
-        return;
+        goto exit_wait;
     }
 
     //
@@ -396,26 +394,28 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     LATE0 = 0;          // /BUSREQ is active
     G3POL = 1;          // Release wait (D-FF reset)
     G3POL = 0;
+    while(!RA0);        // /IORQ
 
+ enter_bus_master:
     bus_master(1);
 
     if (!do_bus_master) {
-        goto io_exit;
+        goto exit_bus_master;
     }
 
     switch (io_addr) {
     case MMU_BANK_SEL:
         mmu_bank_select(io_data);
-        goto io_exit;
+        goto exit_bus_master;
     case MON_ENTER:
     case MON_BREAK:
         mon_enter(io_addr == MON_ENTER /* NMI or not*/);
         while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
-        goto io_exit;
+        goto exit_bus_master;
     case MON_RESTORE:
         mon_restore();
-        goto io_exit;
+        goto exit_bus_master;
     }
 
     //
@@ -537,14 +537,18 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
     #endif
 
- io_exit:
+ exit_bus_master:
     if (invoke_monitor) {
         invoke_monitor = 0;
         mon_setup();
     }
 
     bus_master(0);
+
+ exit_wait:
     LATE0 = 1;              // /BUSREQ is deactive
+    G3POL = 1;              // Release wait (D-FF reset)
+    G3POL = 0;
 
     CLC3IF = 0;             // Clear interrupt flag
     GIE = 1;                // Enable interrupt

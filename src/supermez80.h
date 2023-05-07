@@ -135,6 +135,7 @@ extern int invoke_monitor;
 extern unsigned int mon_step_execution;
 
 void mon_init(void);
+void mon_assert_nmi(void);
 void mon_setup(void);
 void mon_enter(int nmi);
 int mon_prompt(void);

@@ -210,10 +210,15 @@ void mon_init(void)
     mmu_bank_select_callback = bank_select_callback;
 }
 
+void mon_assert_nmi(void)
+{
+    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 0);
+}
+
 void mon_setup(void)
 {
     install_nmi_hook(mmu_bank);
-    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 0);
+    mon_assert_nmi();
 }
 
 void mon_enter(int nmi)
