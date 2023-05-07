@@ -236,16 +236,21 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     static uint8_t disk_stat = DISK_ST_ERROR;
     static uint8_t *disk_datap = NULL;
     uint8_t c;
-    union address_bus_u ab;
 
     GIE = 0;                    // Disable interrupt
 
-    ab.l = PORTB;               // Read address low
+    int do_bus_master = 0;
+    int led_on = 0;
+    int io_addr = PORTB;
+    int io_data = PORTC;
+
+    if (RA5) {
+        goto io_write;
+    }
 
     // Z80 IO read cycle
-    if(!RA5) {
     TRISC = 0x00;               // Set as output
-    switch (ab.l) {
+    switch (io_addr) {
     case UART_CREG:
         if (key_input) {
             LATC = 0xff;        // input available
@@ -277,7 +282,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     default:
         #ifdef CPM_IO_DEBUG
-        printf("WARNING: unknown I/O read %d (%02XH)\n\r", ab.l, ab.l);
+        printf("WARNING: unknown I/O read %d (%02XH)\n\r", io_addr, io_addr);
         invoke_monitor = 1;
         #endif
         LATC = 0xff;            // Invalid data
@@ -299,45 +304,42 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     GIE = 1;                    // Enable interrupt
     return;
-    }
 
+ io_write:
     // Z80 IO write cycle
-    int do_bus_master = 0;
-    int led_on = 0;
-    int io_addr = ab.l;
-    int io_data = PORTC;
-    switch (ab.l) {
+    switch (io_addr) {
     case UART_DREG:
         while(!U3TXIF);
-        U3TXB = PORTC;      // Write into    U3TXB
+        U3TXB = io_data;        // Write into    U3TXB
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
-            *disk_datap++ = PORTC;
+            *disk_datap++ = io_data;
             if (DISK_OP_WRITE == DISK_OP_WRITE && (disk_datap - disk_buf) == SECTOR_SIZE) {
                 do_bus_master = 1;
             }
         } else {
             if (DEBUG_DISK) {
                 printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
-                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
+                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal,
+                       io_data);
             }
         }
         break;
     case DISK_REG_DRIVE:
-        disk_drive = PORTC;
+        disk_drive = io_data;
         break;
     case DISK_REG_TRACK:
-        disk_track = PORTC;
+        disk_track = io_data;
         break;
     case DISK_REG_SECTOR:
-        disk_sector = (disk_sector & 0xff00) | PORTC;
+        disk_sector = (disk_sector & 0xff00) | io_data;
         break;
     case DISK_REG_SECTORH:
-        disk_sector = (disk_sector & 0x00ff) | (PORTC << 8);
+        disk_sector = (disk_sector & 0x00ff) | (io_data << 8);
         break;
     case DISK_REG_FDCOP:
-        disk_op = PORTC;
+        disk_op = io_data;
         if (disk_op == DISK_OP_WRITE) {
             disk_datap = disk_buf;
         } else {
@@ -352,19 +354,19 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         }
         break;
     case DISK_REG_DMAL:
-        disk_dmal = PORTC;
+        disk_dmal = io_data;
         break;
     case DISK_REG_DMAH:
-        disk_dmah = PORTC;
+        disk_dmah = io_data;
         break;
     case MMU_INIT:
-        mmu_bank_config(PORTC);
+        mmu_bank_config(io_data);
         break;
     case MMU_BANK_SEL:
         do_bus_master = 1;
         break;
     case HW_CTRL:
-        hw_ctrl_write(PORTC);
+        hw_ctrl_write(io_data);
         break;
     case MON_ENTER:
     case MON_RESTORE:
@@ -373,7 +375,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     default:
         #ifdef CPM_IO_DEBUG
-        printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", ab.l, PORTC, ab.l, PORTC);
+        printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", io_addr, io_data, io_addr,
+               io_data);
         invoke_monitor = 1;
         #endif
         break;
