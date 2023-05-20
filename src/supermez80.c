@@ -40,7 +40,12 @@ static FILINFO fileinfo;
 static FIL files[NUM_FILES];
 static int num_files = 0;
 uint8_t tmp_buf[2][TMP_BUF_SIZE];
-debug_t debug = { 0 };
+debug_t debug = {
+    0,  // disk
+    0,  // disk_read
+    0,  // disk_write
+    0,  // disk_verbose
+};
 
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
