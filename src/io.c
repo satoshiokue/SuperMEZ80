@@ -117,7 +117,7 @@ void hw_ctrl_write(uint8_t val)
     }
 }
 
-int cpm_disk_read(int drive, uint32_t lba, void *buf, int sectors)
+int cpm_disk_read(unsigned int drive, uint32_t lba, void *buf, unsigned int sectors)
 {
     unsigned int n;
     int result = 0;
@@ -145,7 +145,7 @@ int cpm_disk_read(int drive, uint32_t lba, void *buf, int sectors)
     return result;
 }
 
-int cpm_trsect_to_lba(int drive, int track, int sector, uint32_t *lba)
+int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned int sector, uint32_t *lba)
 {
     if (lba)
         *lba = 0xdeadbeefUL;  // fail safe
@@ -158,7 +158,8 @@ int cpm_trsect_to_lba(int drive, int track, int sector, uint32_t *lba)
     return 0;
 }
 
-int cpm_trsect_from_lba(int drive, int *track, int *sector, uint32_t lba)
+int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
+                        uint32_t lba)
 {
     if (track)
         *track = 0xdead;  // fail safe
@@ -169,9 +170,9 @@ int cpm_trsect_from_lba(int drive, int *track, int *sector, uint32_t lba)
         return -1;
     }
     if (track)
-        *track =  lba / drives[drive].sectors;
+        *track =  (unsigned int)(lba / drives[drive].sectors);
     if (sector)
-        *sector = lba % drives[drive].sectors + 1;
+        *sector = (unsigned int)(lba % drives[drive].sectors + 1);
     return 0;
 }
 
@@ -241,8 +242,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
 
     int do_bus_master = 0;
     int led_on = 0;
-    int io_addr = PORTB;
-    int io_data = PORTC;
+    uint8_t io_addr = PORTB;
+    uint8_t io_data = PORTC;
 
     if (RA5) {
         goto io_write;
@@ -324,8 +325,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         } else {
             if (DEBUG_DISK) {
                 printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
-                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal,
-                       io_data);
+                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
             }
         }
         break;
@@ -339,7 +339,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         disk_sector = (disk_sector & 0xff00) | io_data;
         break;
     case DISK_REG_SECTORH:
-        disk_sector = (disk_sector & 0x00ff) | (io_data << 8);
+        disk_sector = (disk_sector & 0x00ff) | ((uint16_t)io_data << 8);
         break;
     case DISK_REG_FDCOP:
         disk_op = io_data;

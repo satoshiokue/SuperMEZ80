@@ -159,11 +159,11 @@ void dma_release_addrbus(void)
     set_bank_pins((uint32_t)mmu_bank << 16);
 }
 
-void dma_write_to_sram(uint32_t dest, void *buf, int len)
+void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
 {
     uint16_t addr = (dest & LOW_ADDR_MASK);
     uint16_t second_half = 0;
-    int i;
+    unsigned int i;
     union address_bus_u ab;
 
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
@@ -196,11 +196,11 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
     dma_release_addrbus();
 }
 
-void dma_read_from_sram(uint32_t src, void *buf, int len)
+void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
 {
     uint16_t addr = (src & LOW_ADDR_MASK);
     uint16_t second_half = 0;
-    int i;
+    unsigned int i;
     union address_bus_u ab;
 
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)

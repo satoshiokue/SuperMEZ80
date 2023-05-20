@@ -28,8 +28,8 @@
 #define UTIL_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define UTIL_ARRAYSIZEOF(a) (sizeof(a)/sizeof(*(a)))
 
-void util_hexdump(const char *header, void *addr, int size);
-void util_hexdump_sum(const char *header, void *addr, int size);
-void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size);
+void util_hexdump(const char *header, const void *addr, unsigned int size);
+void util_hexdump_sum(const char *header, const void *addr, unsigned int size);
+void util_addrdump(const char *header, uint32_t addr_offs, const void *addr, unsigned int size);
 
 #endif  // __UTILS_H__

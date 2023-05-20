@@ -65,14 +65,14 @@ struct z80_context_s {
     uint16_t ix;
     uint16_t iy;
     uint8_t saved_prog[2];
-    uint8_t nmi;
+    int nmi;
 };
 
 int invoke_monitor = 0;
 unsigned int mon_step_execution = 0;
 static struct z80_context_s z80_context;
 static uint32_t mon_cur_addr = 0;
-static uint32_t mon_cur_drive = 0;
+static unsigned int mon_cur_drive = 0;
 static uint32_t mon_cur_lba = 0;
 static uint32_t mon_bp_addr;
 static uint8_t mon_bp_installed = 0;
@@ -82,7 +82,7 @@ static const char *mon_prompt_str = "MON>";
 uint16_t read_mcu_mem_w(void *addr)
 {
     uint8_t *p = (uint8_t *)addr;
-    return ((p[1] << 8) + p[0]);
+    return (((uint16_t)p[1] << 8) + p[0]);
 }
 
 void write_mcu_mem_w(void *addr, uint16_t val)
@@ -223,7 +223,7 @@ void mon_setup(void)
 
 void mon_enter(int nmi)
 {
-    int stack_addr;
+    uint16_t stack_addr;
     printf("\n\r");
     #ifdef CPM_MON_DEBUG
     printf("Enter monitor\n\r");
@@ -267,7 +267,7 @@ void mon_enter(int nmi)
     }
 }
 
-void edit_line(char *line, int maxlen, int start, int pos)
+void edit_line(char *line, unsigned int maxlen, unsigned int start, unsigned int pos)
 {
     int refresh = 1;
     if (maxlen <= strlen(line))
@@ -313,7 +313,7 @@ void edit_line(char *line, int maxlen, int start, int pos)
         case 0x08:
             if (pos <= start)
                 continue;
-            for (int i = pos; i <= maxlen - 1; i++) {
+            for (unsigned int i = pos; i <= maxlen - 1; i++) {
                 line[i - 1] = line[i];
             }
             pos--;
@@ -324,7 +324,7 @@ void edit_line(char *line, int maxlen, int start, int pos)
         case 0x11:
             line[pos] = '\0';
             printf("\r%s", line);
-            for (int i = pos; i < maxlen; i++) {
+            for (unsigned int i = pos; i < maxlen; i++) {
                 printf(" ");
             }
             continue;
@@ -334,11 +334,11 @@ void edit_line(char *line, int maxlen, int start, int pos)
                 refresh = 0;
                 line[pos + 1] = '\0';
             } else {
-                for (int i = maxlen - 2; pos <= i; i--) {
+                for (unsigned int i = maxlen - 2; pos <= i; i--) {
                     line[i + 1] = line[i];
                 }
             }
-            line[pos++] = c;
+            line[pos++] = (char)c;
         } else {
             printf("<%d>\n\r", c);
         }
@@ -380,6 +380,7 @@ static const struct {
     { "status",         0, mon_cmd_status            },
     { "help",           0, mon_cmd_help              },
 };
+#define MON_INVALID_CMD_INDEX UTIL_ARRAYSIZEOF(mon_cmds)
 
 void mon_remove_space(char **linep)
 {
@@ -427,11 +428,11 @@ int mon_get_hexval(char **linep)
     return result;
 }
 
-int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
+int mon_parse(char *line, unsigned int *command, char *args[MON_MAX_ARGS])
 {
     int nmatches = 0;
-    int match_idx;
-    static int last_command_idx = -1;
+    unsigned int match_idx;
+    static unsigned int last_command_idx = MON_INVALID_CMD_INDEX;
     unsigned int cmd_idx;
     int i;
 
@@ -439,12 +440,12 @@ int mon_parse(char *line, int *command, char *args[MON_MAX_ARGS])
         args[i] = NULL;
 
     mon_remove_space(&line);
-    if (*line == '\0' && 0 < last_command_idx) {
+    if (*line == '\0' && last_command_idx != MON_INVALID_CMD_INDEX) {
         *command = last_command_idx;
         printf("\r%s%s\n\r", mon_prompt_str, mon_cmds[last_command_idx].name);
         return 0;
     }
-    last_command_idx = -1;
+    last_command_idx = MON_INVALID_CMD_INDEX;
 
     // Search command in the command table
     for (cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
@@ -531,11 +532,11 @@ int mon_cmd_dump(int argc, char *args[])
     if (args[0] != NULL && *args[0] != '\0')
         addr = strtoul(args[0], NULL, 16);
     if (args[1] != NULL && *args[1] != '\0')
-        len = strtoul(args[1], NULL, 16);
+        len = (unsigned int)strtoul(args[1], NULL, 16);
 
     if (addr & 0xf) {
         len += (addr & 0xf);
-        addr &= ~0xf;
+        addr &= ~0xfUL;
     }
     if (len & 0xf) {
         len += (16 - (len & 0xf));
@@ -560,21 +561,21 @@ int mon_cmd_disassemble(int argc, char *args[])
     if (args[0] != NULL && *args[0] != '\0')
         addr = strtoul(args[0], NULL, 16);
     if (args[1] != NULL && *args[1] != '\0')
-        len = strtoul(args[1], NULL, 16);
+        len = (unsigned int)strtoul(args[1], NULL, 16);
 
-    int leftovers = 0;
+    unsigned int leftovers = 0;
     while (leftovers < len) {
         unsigned int n = UTIL_MIN(len, sizeof(tmp_buf[0])) - leftovers;
         dma_read_from_sram(addr, &tmp_buf[0][leftovers], n);
         n += leftovers;
-        int done = disas_ops(disas_z80, addr, tmp_buf[0], n, n, NULL);
+        unsigned int done = disas_ops(disas_z80, addr, tmp_buf[0], n, n, NULL);
         leftovers = n - done;
         len -= done;
         addr += done;
         #ifdef CPM_MON_DEBUG
         printf("addr=%lx, done=%d, len=%d, n=%d, leftover=%d\n\r", addr, done, len, n, leftovers);
         #endif
-        for (int i = 0; i < leftovers; i++)
+        for (unsigned int i = 0; i < leftovers; i++)
             tmp_buf[0][i] = tmp_buf[0][sizeof(tmp_buf[0]) - leftovers + i];
     }
     mon_cur_addr = addr;
@@ -588,9 +589,9 @@ int mon_cmd_disassemble(int argc, char *args[])
 int mon_cmd_diskread(int argc, char *args[])
 {
     int i;
-    int drive = mon_cur_drive;
-    static int track = 0;
-    static int sector = 0;
+    unsigned int drive = mon_cur_drive;
+    static unsigned int track = 0;
+    static unsigned int sector = 0;
     unsigned int len = 1;
     uint8_t update_lba = 0;
     uint32_t lba = mon_cur_lba;
@@ -603,10 +604,10 @@ int mon_cmd_diskread(int argc, char *args[])
         lba = strtoul(args[0], NULL, 10);
     } else {
         if (*args[0] != '\0')
-            drive = strtoul(args[0], NULL, 10);
+            drive = (unsigned int)strtoul(args[0], NULL, 10);
         if (*args[1] != '\0') {
             update_lba = 1;
-            track = strtoul(args[1], NULL, 10);
+            track = (unsigned int)strtoul(args[1], NULL, 10);
         }
         if (argc == 2) {
             update_lba = 0;
@@ -616,10 +617,10 @@ int mon_cmd_diskread(int argc, char *args[])
         }
         if (2 < argc && *args[2] != '\0') {
             update_lba = 1;
-            sector = strtoul(args[2], NULL, 10);
+            sector = (unsigned int)strtoul(args[2], NULL, 10);
         }
         if (3 < argc && *args[3] != '\0')
-            len = strtoul(args[3], NULL, 10);
+            len = (unsigned int)strtoul(args[3], NULL, 10);
     }
     mon_cur_drive = drive;
 
@@ -646,15 +647,15 @@ int mon_cmd_diskread(int argc, char *args[])
 
 int mon_cmd_sdread(int argc, char *args[])
 {
-    int i;
+    unsigned int i;
     static uint32_t lba = 0;
-    int count = 1;
+    unsigned int count = 1;
 
     if (0 < argc && *args[0] != '\0') {
         lba = strtoul(args[0], NULL, 10);
     }
     if (1 < argc && *args[1] != '\0') {
-        count = strtoul(args[1], NULL, 10);
+        count = (unsigned int)strtoul(args[1], NULL, 10);
     }
 
     for (i = 0; i < count; i++) {
@@ -673,7 +674,7 @@ int mon_cmd_sdread(int argc, char *args[])
 int mon_cmd_step(int argc, char *args[])
 {
     if (args[0] != NULL && *args[0] != '\0') {
-        mon_step_execution = strtoul(args[0], NULL, 16);
+        mon_step_execution = (unsigned int)strtoul(args[0], NULL, 16);
     } else {
         mon_step_execution = 1;
     }
@@ -689,13 +690,13 @@ int mon_cmd_status(int argc, char *args[])
 
     printf("\n\r");
     printf("stack:\n\r");
-    dma_read_from_sram(phys_addr(sp & ~0xf), tmp_buf[0], 64);
-    util_addrdump("", phys_addr(sp & ~0xf), tmp_buf[0], 64);
+    dma_read_from_sram(phys_addr(sp & ~0xfU), tmp_buf[0], 64);
+    util_addrdump("", phys_addr(sp & ~0xfU), tmp_buf[0], 64);
 
     printf("\n\r");
     printf("program:\n\r");
-    dma_read_from_sram(phys_addr(pc & ~0xf), tmp_buf[0], 64);
-    util_addrdump("", phys_addr(pc & ~0xf), tmp_buf[0], 64);
+    dma_read_from_sram(phys_addr(pc & ~0xfU), tmp_buf[0], 64);
+    util_addrdump("", phys_addr(pc & ~0xfU), tmp_buf[0], 64);
 
     printf("\n\r");
     disas_ops(disas_z80, phys_addr(pc), &tmp_buf[0][pc & 0xf], 16, 16, NULL);
@@ -757,6 +758,7 @@ int mon_cmd_reset(int argc, char *args[])
 {
     RESET();
     // no return
+    return 0;
 }
 
 int mon_cmd_set(int argc, char *args[])
@@ -804,7 +806,7 @@ int mon_cmd_set(int argc, char *args[])
 
     // set value to the variable if second argument is specified
     if (args[1] != NULL && *args[1] != '\0') {
-        *variables[i].ptr = strtoul(args[1], NULL, 16);
+        *variables[i].ptr = (uint8_t)strtoul(args[1], NULL, 16);
         write_debug_settings();
     }
 
@@ -819,10 +821,10 @@ int mon_prompt(void)
     char line[32];
     int argc;
     char *args[MON_MAX_ARGS];
-    const int prompt_len = strlen(mon_prompt_str);
+    const unsigned int prompt_len = strlen(mon_prompt_str);
     char* input = &line[prompt_len];
 
-    sprintf(line, mon_prompt_str);
+    sprintf(line, "%s", mon_prompt_str);
     edit_line(line, sizeof(line), prompt_len, prompt_len);
 
     printf("\n\r");
@@ -831,7 +833,7 @@ int mon_prompt(void)
     printf("command: %s\n\r", input);
     #endif
 
-    int command;
+    unsigned int command;
     argc = mon_parse(input, &command, args);
     if (argc < 0) {
         printf("type 'help' to see the list of available commands\n\r");

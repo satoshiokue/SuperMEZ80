@@ -124,11 +124,15 @@ extern debug_t debug;
 void bus_master(int enable);
 
 // io
+extern char getch(void);
+extern void ungetch(char c);
 extern drive_t drives[];
 extern const int num_drives;
-extern int cpm_disk_read(int drive, uint32_t lba, void *buf, int sectors);
-extern int cpm_trsect_to_lba(int drive, int track, int sector, uint32_t *lba);
-extern int cpm_trsect_from_lba(int drive, int *track, int *sector, uint32_t lba);
+extern int cpm_disk_read(unsigned int drive, uint32_t lba, void *buf, unsigned int sectors);
+extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned int sector,
+                             uint32_t *lba);
+extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
+                               uint32_t lba);
 
 // monitor
 extern int invoke_monitor;
@@ -154,8 +158,8 @@ extern void mem_init(void);
 extern void set_bank_pins(uint32_t addr);
 extern void dma_acquire_addrbus(uint32_t addr);
 extern void dma_release_addrbus(void);
-extern void dma_write_to_sram(uint32_t dest, void *buf, int len);
-extern void dma_read_from_sram(uint32_t src, void *buf, int len);
+extern void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len);
+extern void dma_read_from_sram(uint32_t src, void *buf, unsigned int len);
 extern void mmu_bank_config(int nbanks);
 extern void mmu_bank_select(int bank);
 

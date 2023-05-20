@@ -214,7 +214,8 @@ void ioexp_init(void)
 
 int disk_init(void)
 {
-    unsigned int i;
+    int i;
+    unsigned int drive;
 
     //
     // Initialize SD Card
@@ -282,9 +283,9 @@ int disk_init(void)
     //
     // Open disk images
     //
-    for (unsigned int drive = 0; drive < num_drives && num_files < NUM_FILES; drive++) {
-        char drive_letter = 'A' + drive;
-        char buf[22];
+    for (drive = 0; drive < num_drives && num_files < NUM_FILES; drive++) {
+        char drive_letter = (char)('A' + drive);
+        char * const buf = (char *)tmp_buf[0];
         sprintf(buf, "%s/DRIVE%c.DSK", fileinfo.fname, drive_letter);
         if (f_open(&files[num_files], buf, FA_READ|FA_WRITE) == FR_OK) {
             printf("Image file %s/DRIVE%c.DSK is assigned to drive %c\n\r",

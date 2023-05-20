@@ -78,7 +78,7 @@ static uint8_t mcp23S08_reg_read(struct MCP23S08 *ctx, uint8_t reg)
 {
     struct SPI *spi = ctx->spi;
     uint8_t buf[3];
-    buf[0] = 0x41 | (ctx->addr) << 1;  // read
+    buf[0] = 0x41 | (uint8_t)((ctx->addr) << 1);  // read
     buf[1] = reg;
     SPI(begin_transaction)(spi);
     SPI(send)(spi, buf, 2);
@@ -91,7 +91,7 @@ static void mcp23S08_reg_write(struct MCP23S08 *ctx, uint8_t reg, uint8_t val)
 {
     struct SPI *spi = ctx->spi;
     uint8_t buf[3];
-    buf[0] = 0x40 | (ctx->addr) << 1;  // read
+    buf[0] = 0x40 | (uint8_t)((ctx->addr) << 1);  // read
     buf[1] = reg;
     buf[2] = val;
     SPI(begin_transaction)(spi);
@@ -149,7 +149,7 @@ int mcp23s08_probe(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, 
         dprintf(("MCP23S08: probe %8s: %02x %s %02x\n\r", reg_names[reg], val,
                  (v == val)?"==":"!=", v));
         if (v != val) {
-            result = i + 1;
+            result = (int)(i + 1);
             goto done;
         }
     }
@@ -201,7 +201,7 @@ void mcp23s08_masked_write(struct MCP23S08 *ctx, uint32_t mask, uint32_t val)
 {
     if (!ctx->alive || mask == 0)
         return;
-    ctx->olat = ((ctx->olat & ~mask) | (val & mask));
+    ctx->olat = ((ctx->olat & ~(uint8_t)mask) | (val & (uint8_t)mask));
     mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
 }
 
