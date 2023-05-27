@@ -148,7 +148,24 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void* buff)
 {
-    return RES_ERROR;
+    DRESULT res = RES_ERROR;
+
+    // See diskio.h for meaning of ioctl commands
+    switch (cmd) {
+    case CTRL_SYNC:
+        res = RES_OK;
+        break;
+    case GET_SECTOR_COUNT:
+    case GET_SECTOR_SIZE:
+    case GET_BLOCK_SIZE:
+    case CTRL_TRIM:
+    default:
+        printf("disk_ioctl: pdrv=%d, cmd=%d: Not handled.\n\r", pdrv, cmd);
+        break;
+    }
+
+    dprintf(("disk_ioctl: pdrv=%d, cmd=%d, buff=0x%lx: res=%d\n\r", pdrv, cmd, (long)buff, res));
+    return res;
 }
 
 int fatdisk_debug(int newval)

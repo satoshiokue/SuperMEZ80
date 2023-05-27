@@ -130,13 +130,14 @@ int cpm_disk_read(unsigned int drive, uint32_t lba, void *buf, unsigned int sect
     }
 
     FIL *filep = drives[drive].filep;
-    if (f_lseek(filep, lba * SECTOR_SIZE) != FR_OK) {
-        printf("f_lseek(): ERROR\n\r");
+    FRESULT fres;
+    if ((fres = f_lseek(filep, lba * SECTOR_SIZE)) != FR_OK) {
+        printf("f_lseek(): ERROR %d\n\r", fres);
         return -1;
     }
     while (result < sectors) {
-        if (f_read(filep, buf, SECTOR_SIZE, &n) != FR_OK) {
-            printf("f_read(): ERROR\n\r");
+        if ((fres = f_read(filep, buf, SECTOR_SIZE, &n)) != FR_OK || n != SECTOR_SIZE) {
+            printf("f_read(): ERROR res=%d, n=%d\n\r", fres, n);
             return result;
         }
         buf = (void*)((uint8_t*) + SECTOR_SIZE);
@@ -446,8 +447,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
     FIL *filep = drives[disk_drive].filep;
     unsigned int n;
-    if (f_lseek(filep, sector * SECTOR_SIZE) != FR_OK) {
-        printf("f_lseek(): ERROR\n\r");
+    FRESULT fres;
+    if ((fres = f_lseek(filep, sector * SECTOR_SIZE)) != FR_OK) {
+        printf("f_lseek(): ERROR %d\n\r", fres);
         disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
@@ -457,8 +459,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         //
 
         // read from the DISK
-        if (f_read(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
-            printf("f_read(): ERROR\n\r");
+        if ((fres = f_read(filep, disk_buf, SECTOR_SIZE, &n)) != FR_OK || n != SECTOR_SIZE) {
+            printf("f_read(): ERROR res=%d, n=%d\n\r", fres, n);
             disk_stat = DISK_ST_ERROR;
             goto disk_io_done;
         }
@@ -519,8 +521,13 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         }
 
         // write buffer to the DISK
-        if (f_write(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
-            printf("f_write(): ERROR\n\r");
+        if ((fres = f_write(filep, disk_buf, SECTOR_SIZE, &n)) != FR_OK || n != SECTOR_SIZE) {
+            printf("f_write(): ERROR res=%d, n=%d\n\r", fres, n);
+            disk_stat = DISK_ST_ERROR;
+            goto disk_io_done;
+        }
+        if ((fres = f_sync(filep)) != FR_OK) {
+            printf("f_sync(): ERROR %d\n\r", fres);
             disk_stat = DISK_ST_ERROR;
             goto disk_io_done;
         }
