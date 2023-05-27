@@ -48,6 +48,7 @@ drive_t drives[] = {
     { 16484 },
 };
 const int num_drives = (sizeof(drives)/sizeof(*drives));
+unsigned int io_output_chars = 0;
 
 // hardware control
 static uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
@@ -315,6 +316,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case UART_DREG:
         while(!U3TXIF);
         U3TXB = io_data;        // Write into    U3TXB
+        io_output_chars++;
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {

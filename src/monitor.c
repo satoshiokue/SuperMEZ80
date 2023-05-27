@@ -223,8 +223,14 @@ void mon_setup(void)
 
 void mon_enter(int nmi)
 {
+    static unsigned int prev_output_chars = 0;
     uint16_t stack_addr;
-    printf("\n\r");
+
+    // new line if some output from the target
+    if (prev_output_chars != io_output_chars) {
+        printf("\n\r");
+        prev_output_chars = io_output_chars;
+    }
     #ifdef CPM_MON_DEBUG
     printf("Enter monitor\n\r");
     #endif
