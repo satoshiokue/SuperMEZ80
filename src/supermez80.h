@@ -149,9 +149,10 @@ void mon_restore(void);
 
 // memory
 extern int mmu_bank;
-extern uint32_t mmu_num_banks;
+extern int mmu_num_banks;
 extern uint32_t mmu_mem_size;
 extern void (*mmu_bank_select_callback)(int from, int to);
+extern void (*mmu_bank_config_callback)(void);
 
 extern void mem_init(void);
 #define bank_phys_addr(bank, addr) (((uint32_t)(bank) << 16) + (addr))

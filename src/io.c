@@ -365,8 +365,6 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         disk_dmah = io_data;
         break;
     case MMU_INIT:
-        mmu_bank_config(io_data);
-        break;
     case MMU_BANK_SEL:
         do_bus_master = 1;
         break;
@@ -406,6 +404,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
     switch (io_addr) {
+    case MMU_INIT:
+        mmu_bank_config(io_data);
+        goto exit_bus_master;
     case MMU_BANK_SEL:
         mmu_bank_select(io_data);
         goto exit_bus_master;

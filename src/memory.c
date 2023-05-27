@@ -12,9 +12,10 @@
 
 // MMU
 int mmu_bank = 0;
-uint32_t mmu_num_banks = 0;
+int mmu_num_banks = 0;
 uint32_t mmu_mem_size = 0;
 void (*mmu_bank_select_callback)(int from, int to) = NULL;
+void (*mmu_bank_config_callback)(void) = NULL;
 
 void mem_init()
 {
@@ -34,7 +35,7 @@ void mem_init()
 
 #ifdef CPM_MMU_EXERCISE
     mmu_mem_size = 0x80000;
-    mmu_num_banks = mmu_mem_size / 0x10000;
+    mmu_num_banks = (int)(mmu_mem_size / 0x10000);
     memset(tmp_buf[0], 0, TMP_BUF_SIZE * 2);
     for (addr = 0; addr < mmu_mem_size; addr += TMP_BUF_SIZE * 2) {
         dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE * 2);
@@ -101,7 +102,7 @@ void mem_init()
     }
     #endif  // CPM_MMU_DEBUG
 
-    mmu_num_banks = mmu_mem_size / 0x10000;
+    mmu_num_banks = (int)(mmu_mem_size / 0x10000);
     printf("Memory 000000 - %06lXH %d KB OK\r\n", addr, (int)(mmu_mem_size / 1024));
 #endif  // !CPM_MMU_EXERCISE
 }
@@ -240,6 +241,8 @@ void mmu_bank_config(int nbanks)
     #endif
     if (mmu_num_banks < nbanks)
         printf("WARNING: too many banks requested. (request is %d)\n\r", nbanks);
+    if (mmu_bank_config_callback)
+        (*mmu_bank_config_callback)();
 }
 
 void mmu_bank_select(int bank)
