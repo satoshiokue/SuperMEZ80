@@ -463,7 +463,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             goto disk_io_done;
         }
 
-        if (DEBUG_DISK_READ && DEBUG_DISK_VERBOSE) {
+        if (DEBUG_DISK_READ && DEBUG_DISK_VERBOSE && !(debug.disk_mask & (1 << disk_drive))) {
             util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
         }
 
@@ -514,7 +514,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             // writing data 128 bytes are in the buffer already
         }
 
-        if (DEBUG_DISK_WRITE && DEBUG_DISK_VERBOSE) {
+        if (DEBUG_DISK_WRITE && DEBUG_DISK_VERBOSE && !(debug.disk_mask & (1 << disk_drive))) {
             util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
         }
 
@@ -534,8 +534,9 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
  disk_io_done:
-    if ((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
-        (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) {
+    if (((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
+         (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) &&
+        !(debug.disk_mask & (1 << disk_drive))) {
         printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
                disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
                disk_dmah, disk_dmal, disk_stat);

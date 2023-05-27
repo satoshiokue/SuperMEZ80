@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include "SPI.h"
 #include "SDCard.h"
+#include "utils.h"
 
 #define SPI_PREFIX SPI0
 
@@ -210,6 +211,9 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, unsigned int count)
         response = SPI(receive_byte)(spi);
         crc = __SDCard_crc16(crc, &response, 1);
     }
+    if ((debug_flags & SDCARD_DEBUG_READ) && (debug_flags & SDCARD_DEBUG_VERBOSE)) {
+        util_addrdump("SD: ", (addr * 512) + offs, buf, count);
+    }
 
     resp_crc = (uint16_t)SPI(receive_byte)(spi) << 8;
     resp_crc |= SPI(receive_byte)(spi);
@@ -240,6 +244,9 @@ int SDCard_write512(uint32_t addr, int offs, const void *buf, unsigned int count
     int retry = 5;
 
     dwprintf(("SD Card: write512: addr=%8ld, offs=%d, count=%d\n\r", addr, offs, count));
+    if ((debug_flags & SDCARD_DEBUG_WRITE) && (debug_flags & SDCARD_DEBUG_VERBOSE)) {
+        util_addrdump("SD: ", (addr * 512) + offs, buf, count);
+    }
 
     crc = 0;
     response = 0xff;

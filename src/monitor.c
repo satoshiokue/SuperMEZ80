@@ -180,9 +180,11 @@ static struct {
     uint8_t fatdisk;
     uint8_t fatdisk_read;
     uint8_t fatdisk_write;
+    uint8_t fatdisk_verbose;
     uint8_t sdcard;
     uint8_t sdcard_read;
     uint8_t sdcard_write;
+    uint8_t sdcard_verbose;
 } dbg_set;
 
 static void read_debug_settings(void)
@@ -195,6 +197,7 @@ static void read_debug_settings(void)
     dbg_set.fatdisk = (v & FATDISK_DEBUG) ? 1 : 0;
     dbg_set.fatdisk_read = (v & FATDISK_DEBUG_READ) ? 1 : 0;
     dbg_set.fatdisk_write = (v & FATDISK_DEBUG_WRITE) ? 1 : 0;
+    dbg_set.fatdisk_verbose = (v & FATDISK_DEBUG_VERBOSE) ? 1 : 0;
 
     // SDCard
     v = SDCard_debug(0);
@@ -202,6 +205,7 @@ static void read_debug_settings(void)
     dbg_set.sdcard = (v & SDCARD_DEBUG) ? 1 : 0;
     dbg_set.sdcard_read = (v & SDCARD_DEBUG_READ) ? 1 : 0;
     dbg_set.sdcard_write = (v & SDCARD_DEBUG_WRITE) ? 1 : 0;
+    dbg_set.sdcard_verbose = (v & SDCARD_DEBUG_VERBOSE) ? 1 : 0;
 }
 
 static void write_debug_settings(void)
@@ -213,6 +217,7 @@ static void write_debug_settings(void)
     v |= (dbg_set.fatdisk ? FATDISK_DEBUG : 0);
     v |= (dbg_set.fatdisk_read ? FATDISK_DEBUG_READ : 0);
     v |= (dbg_set.fatdisk_write ? FATDISK_DEBUG_WRITE : 0);
+    v |= (dbg_set.fatdisk_verbose ? FATDISK_DEBUG_VERBOSE : 0);
     fatdisk_debug(v);
 
     // SDCard
@@ -220,6 +225,7 @@ static void write_debug_settings(void)
     v |= (dbg_set.sdcard ? SDCARD_DEBUG : 0);
     v |= (dbg_set.sdcard_read ? SDCARD_DEBUG_READ : 0);
     v |= (dbg_set.sdcard_write ? SDCARD_DEBUG_WRITE : 0);
+    v |= (dbg_set.sdcard_verbose ? SDCARD_DEBUG_VERBOSE : 0);
     SDCard_debug(v);
 }
 
@@ -795,22 +801,28 @@ int mon_cmd_reset(int argc, char *args[])
 int mon_cmd_set(int argc, char *args[])
 {
     unsigned int i;
+    #define VA_I8 0
+    #define VA_I16 (1 << 0)
     static const struct {
         const char *name;
-        uint8_t *ptr;
+        void *ptr;
+        uint8_t attr;
     } variables[] = {
         #ifdef ENABLE_DISK_DEBUG
-        { "debug_disk",         &debug.disk         },
-        { "debug_disk_read",    &debug.disk_read    },
-        { "debug_disk_write",   &debug.disk_write   },
-        { "debug_disk_verbose", &debug.disk_verbose },
+        { "debug_disk",            &debug.disk,              VA_I8  },
+        { "debug_disk_read",       &debug.disk_read,         VA_I8  },
+        { "debug_disk_write",      &debug.disk_write,        VA_I8  },
+        { "debug_disk_verbose",    &debug.disk_verbose,      VA_I8  },
+        { "debug_disk_mask",       &debug.disk_mask,         VA_I16 },
         #endif
-        { "debug_fatdisk",      &dbg_set.fatdisk        },
-        { "debug_fatdisk_read", &dbg_set.fatdisk_read   },
-        { "debug_fatdisk_write",&dbg_set.fatdisk_write  },
-        { "debug_sdcard",       &dbg_set.sdcard         },
-        { "debug_sdcard_read",  &dbg_set.sdcard_read    },
-        { "debug_sdcard_write", &dbg_set.sdcard_write   },
+        { "debug_fatdisk",         &dbg_set.fatdisk,         VA_I8  },
+        { "debug_fatdisk_read",    &dbg_set.fatdisk_read,    VA_I8  },
+        { "debug_fatdisk_write",   &dbg_set.fatdisk_write,   VA_I8  },
+        { "debug_fatdisk_verbose", &dbg_set.fatdisk_verbose, VA_I8  },
+        { "debug_sdcard",          &dbg_set.sdcard,          VA_I8  },
+        { "debug_sdcard_read",     &dbg_set.sdcard_read,     VA_I8  },
+        { "debug_sdcard_write",    &dbg_set.sdcard_write,    VA_I8  },
+        { "debug_sdcard_verbose",  &dbg_set.sdcard_verbose,  VA_I8  },
     };
 
     read_debug_settings();
@@ -818,7 +830,10 @@ int mon_cmd_set(int argc, char *args[])
     // show all settings if no arguments specified
     if (args[0] == NULL || *args[0] == '\0') {
         for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
-            printf("%s=%d\n\r", variables[i].name, *variables[i].ptr);
+            if (variables[i].attr & VA_I16)
+                printf("%s=%d\n\r", variables[i].name, *(uint16_t*)variables[i].ptr);
+            else
+                printf("%s=%d\n\r", variables[i].name, *(uint8_t*)variables[i].ptr);
         }
         return MON_CMD_OK;
     }
@@ -837,19 +852,25 @@ int mon_cmd_set(int argc, char *args[])
 
     // set value to the variable if second argument is specified
     if (args[1] != NULL && *args[1] != '\0') {
-        *variables[i].ptr = (uint8_t)strtoul(args[1], NULL, 16);
+        if (variables[i].attr & VA_I16)
+            *(uint16_t*)variables[i].ptr = (uint8_t)strtoul(args[1], NULL, 16);
+        else
+            *(uint8_t*)variables[i].ptr = (uint8_t)strtoul(args[1], NULL, 16);
         write_debug_settings();
     }
 
     // show name and value of the variable
-    printf("%s=%d\n\r", variables[i].name, *variables[i].ptr);
+    if (variables[i].attr & VA_I16)
+        printf("%s=%d\n\r", variables[i].name, *(uint16_t*)variables[i].ptr);
+    else
+        printf("%s=%d\n\r", variables[i].name, *(uint8_t*)variables[i].ptr);
 
     return MON_CMD_OK;
 }
 
 int mon_prompt(void)
 {
-    char line[32];
+    char line[48];
     int argc;
     char *args[MON_MAX_ARGS];
     const unsigned int prompt_len = strlen(mon_prompt_str);

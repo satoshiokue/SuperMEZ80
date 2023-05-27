@@ -41,6 +41,7 @@
 #define SDCARD_DEBUG            (1 << 0)
 #define SDCARD_DEBUG_READ       (1 << 1)
 #define SDCARD_DEBUG_WRITE      (1 << 2)
+#define SDCARD_DEBUG_VERBOSE    (1 << 3)
 
 int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t timeout);
 int SDCard_command(uint8_t command, uint32_t argument, void *response, unsigned int length);

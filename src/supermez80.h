@@ -114,6 +114,7 @@ typedef struct {
     uint8_t disk_read;
     uint8_t disk_write;
     uint8_t disk_verbose;
+    uint16_t disk_mask;
 } debug_t;
 
 //

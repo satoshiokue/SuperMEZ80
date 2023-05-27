@@ -110,12 +110,15 @@ DSTATUS disk_status(BYTE pdrv)
 
 DRESULT disk_read(BYTE pdrv, BYTE* buff, LBA_t sector, UINT count)
 {
-    drprintf(("disk_read: pdrv=%d, sector=%ld, count=%d\n\r", pdrv, sector, count));
+    drprintf(("disk_read:  pdrv=%d, sector=%ld, count=%d\n\r", pdrv, sector, count));
 
     for (int i = 0; i < count; i++) {
         if (SDCard_read512(start_lba + sector, 0, buff, SECTOR_SIZE) != SDCARD_SUCCESS) {
             dprintf(("failed to read sector %ld\n\r", sector));
             return RES_ERROR;
+        }
+        if ((debug_flags & FATDISK_DEBUG_READ) && (debug_flags & FATDISK_DEBUG_VERBOSE)) {
+            util_addrdump("fat: ", sector * SECTOR_SIZE, buff, SECTOR_SIZE);
         }
         sector++;
         buff += SECTOR_SIZE;
@@ -132,6 +135,9 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buff, LBA_t sector, UINT count)
         if (SDCard_write512(start_lba + sector, 0, buff, SECTOR_SIZE) != SDCARD_SUCCESS) {
             dprintf(("failed to write sector %ld\n\r", sector));
             return RES_ERROR;
+        }
+        if ((debug_flags & FATDISK_DEBUG_WRITE) && (debug_flags & FATDISK_DEBUG_VERBOSE)) {
+            util_addrdump("fat: ", sector * SECTOR_SIZE, buff, SECTOR_SIZE);
         }
         sector++;
         buff += SECTOR_SIZE;

@@ -25,8 +25,9 @@
 #define __FATDISK_DEBUG_H__
 
 extern int fatdisk_debug(int debug);
-#define FATDISK_DEBUG       (1 << 0)
-#define FATDISK_DEBUG_READ  (1 << 1)
-#define FATDISK_DEBUG_WRITE (1 << 2)
+#define FATDISK_DEBUG         (1 << 0)
+#define FATDISK_DEBUG_READ    (1 << 1)
+#define FATDISK_DEBUG_WRITE   (1 << 2)
+#define FATDISK_DEBUG_VERBOSE (1 << 3)
 
 #endif  // __FATDISK_DEBUG_H__

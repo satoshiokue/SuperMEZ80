@@ -45,6 +45,7 @@ debug_t debug = {
     0,  // disk_read
     0,  // disk_write
     0,  // disk_verbose
+    0,  // disk_mask
 };
 
 const unsigned char rom[] = {
