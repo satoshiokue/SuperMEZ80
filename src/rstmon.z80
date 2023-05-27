@@ -33,6 +33,9 @@ CONDAT	EQU	1		; console output port
 	DEFS	08H - $, 0	; NOP
 	ORG	0008H		; RST 08H interrupt vector
 ENTRY:
+	OUT	(173),A		; RST08 trap
+	NOP
+
 	LD	(SAVED_REG_SP),SP
 	LD	SP,SAVED_REG_SP
 	push	AF
@@ -42,7 +45,7 @@ ENTRY:
 	push	IX
 	push	IY
 
-	OUT	(172),A
+	OUT	(174),A		; enter RST08 monitor
 
 	pop	IY
 	pop	IX

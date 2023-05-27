@@ -371,9 +371,11 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case HW_CTRL:
         hw_ctrl_write(io_data);
         break;
-    case MON_ENTER:
-    case MON_RESTORE:
-    case MON_BREAK:
+    case MON_NMI_PREP:
+    case MON_NMI_ENTER:
+    case MON_RST08_PREP:
+    case MON_RST08_ENTER:
+    case MON_CLEANUP:
         do_bus_master = 1;
         break;
     default:
@@ -410,14 +412,18 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case MMU_BANK_SEL:
         mmu_bank_select(io_data);
         goto exit_bus_master;
-    case MON_ENTER:
-    case MON_BREAK:
-        mon_enter(io_addr == MON_ENTER /* NMI or not*/);
+    case MON_NMI_PREP:
+    case MON_RST08_PREP:
+        mon_prepare(io_addr == MON_NMI_PREP /* NMI or not*/);
+        goto exit_bus_master;
+    case MON_NMI_ENTER:
+    case MON_RST08_ENTER:
+        mon_enter(io_addr == MON_NMI_ENTER /* NMI or not*/);
         while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
         goto exit_bus_master;
-    case MON_RESTORE:
-        mon_restore();
+    case MON_CLEANUP:
+        mon_cleanup();
         goto exit_bus_master;
     }
 

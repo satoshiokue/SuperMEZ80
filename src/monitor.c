@@ -36,9 +36,12 @@ static const unsigned char nmimon[] = {
 // NMI entry at 0x0066
 #include "nmimon.inc"
 };
-#define NMI_ENTRY 0x0066
-#define NMI_HOOK_SIZE (sizeof(nmimon) - NMI_ENTRY)
-static const unsigned char *nmi_hook = &nmimon[NMI_ENTRY];
+#define NMI_VECTOR 0x0066
+#define NMI_VECTOR_SIZE 3
+#define NMI_HOOK (NMI_VECTOR + NMI_VECTOR_SIZE)
+#define NMI_HOOK_SIZE (sizeof(nmimon) - NMI_HOOK)
+static const unsigned char *nmi_vector = &nmimon[NMI_VECTOR];
+static const unsigned char *nmi_hook = &nmimon[NMI_HOOK];
 static const uint16_t nmi_hook_stack = sizeof(nmimon);
 static unsigned char nmi_hook_saved[NMI_HOOK_SIZE];
 static int nmi_hook_installed = MMU_INVALID_BANK;
@@ -47,9 +50,12 @@ static const unsigned char rstmon[] = {
 // break point interrupt entry at 0x0008
 #include "rstmon.inc"
 };
-#define RST_ENTRY 0x0008
-#define RST_HOOK_SIZE (sizeof(rstmon) - RST_ENTRY)
-static const unsigned char *rst_hook = &rstmon[RST_ENTRY];
+#define RST_VECTOR 0x0008
+#define RST_VECTOR_SIZE 3
+#define RST_HOOK (RST_VECTOR + RST_VECTOR_SIZE)
+#define RST_HOOK_SIZE (sizeof(rstmon) - RST_HOOK)
+static const unsigned char *rst_vector = &rstmon[RST_VECTOR];
+static const unsigned char *rst_hook = &rstmon[RST_HOOK];
 static const uint16_t rst_hook_stack = sizeof(rstmon);
 static unsigned char rst_hook_saved[RST_HOOK_SIZE];
 static int rst_hook_installed = MMU_INVALID_BANK;
@@ -119,7 +125,7 @@ static void uninstall_nmi_hook(void)
 {
     if (nmi_hook_installed == MMU_INVALID_BANK)
         return;
-    dma_write_to_sram(bank_phys_addr(nmi_hook_installed,NMI_ENTRY), nmi_hook_saved, NMI_HOOK_SIZE);
+    dma_write_to_sram(bank_phys_addr(nmi_hook_installed, NMI_HOOK), nmi_hook_saved, NMI_HOOK_SIZE);
     nmi_hook_installed = MMU_INVALID_BANK;
 }
 
@@ -128,16 +134,21 @@ static void install_nmi_hook(int bank)
     if (nmi_hook_installed != MMU_INVALID_BANK) {
         uninstall_nmi_hook();
     }
-    dma_read_from_sram(bank_phys_addr(bank, NMI_ENTRY), nmi_hook_saved, NMI_HOOK_SIZE);
-    dma_write_to_sram(bank_phys_addr(bank, NMI_ENTRY), nmi_hook, NMI_HOOK_SIZE);
+    dma_read_from_sram(bank_phys_addr(bank, NMI_HOOK), nmi_hook_saved, NMI_HOOK_SIZE);
+    dma_write_to_sram(bank_phys_addr(bank, NMI_HOOK), nmi_hook, NMI_HOOK_SIZE);
     nmi_hook_installed = bank;
+}
+
+static void install_nmi_vector(int bank)
+{
+    dma_write_to_sram(bank_phys_addr(bank, NMI_VECTOR), nmi_vector, NMI_VECTOR_SIZE);
 }
 
 static void uninstall_rst_hook(void)
 {
     if (rst_hook_installed == MMU_INVALID_BANK)
         return;
-    dma_write_to_sram(bank_phys_addr(rst_hook_installed,RST_ENTRY), rst_hook_saved, RST_HOOK_SIZE);
+    dma_write_to_sram(bank_phys_addr(rst_hook_installed, RST_HOOK), rst_hook_saved, RST_HOOK_SIZE);
     rst_hook_installed = MMU_INVALID_BANK;
 }
 
@@ -145,17 +156,24 @@ static void install_rst_hook(int bank)
 {
     if (rst_hook_installed != MMU_INVALID_BANK)
         uninstall_rst_hook();
-    dma_read_from_sram(bank_phys_addr(bank, RST_ENTRY), rst_hook_saved, RST_HOOK_SIZE);
-    dma_write_to_sram(bank_phys_addr(bank, RST_ENTRY), rst_hook, RST_HOOK_SIZE);
+    dma_read_from_sram(bank_phys_addr(bank, RST_HOOK), rst_hook_saved, RST_HOOK_SIZE);
+    dma_write_to_sram(bank_phys_addr(bank, RST_HOOK), rst_hook, RST_HOOK_SIZE);
     rst_hook_installed = bank;
+}
+
+static void install_rst_vector(int bank)
+{
+    dma_write_to_sram(bank_phys_addr(bank, RST_VECTOR), rst_vector, NMI_VECTOR_SIZE);
 }
 
 static void bank_select_callback(int from, int to)
 {
-    if (nmi_hook_installed != MMU_INVALID_BANK)
-        install_nmi_hook(to);
-    if (rst_hook_installed != MMU_INVALID_BANK)
-        install_rst_hook(to);
+    static uint16_t installed = 0;
+
+    if (mon_bp_installed && !(installed & (1 << to))) {
+        install_rst_vector(to);
+        installed |= (1 << to);
+    }
 }
 
 static struct {
@@ -217,8 +235,17 @@ void mon_assert_nmi(void)
 
 void mon_setup(void)
 {
-    install_nmi_hook(mmu_bank);
+    install_nmi_vector(mmu_bank);
     mon_assert_nmi();
+}
+
+void mon_prepare(int nmi)
+{
+    if (nmi) {
+        install_nmi_hook(mmu_bank);
+    } else {
+        install_rst_hook(mmu_bank);
+    }
 }
 
 void mon_enter(int nmi)
@@ -261,7 +288,7 @@ void mon_enter(int nmi)
 
         mon_show_registers();
         dma_read_from_sram(phys_addr(mon_cur_addr), tmp_buf[0], 64);
-        disas_ops(disas_z80, phys_addr(mon_cur_addr), tmp_buf[0], 1, 64, NULL);
+        disas_ops(disas_z80, phys_addr(mon_cur_addr), tmp_buf[0], 64, 1, NULL);
     }
 
     if (!nmi && mon_bp_installed && z80_context.pc == (mon_bp_addr & 0xffff) + 1) {
@@ -720,7 +747,6 @@ int mon_cmd_breakpoint(int argc, char *args[])
             // clear previous break point if it exist
             dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
             mon_bp_installed = 0;
-            uninstall_rst_hook();
         }
 
         mon_bp_addr = strtoul(args[0], &p, 16);  // new break point address
@@ -730,7 +756,7 @@ int mon_cmd_breakpoint(int argc, char *args[])
         dma_read_from_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
         dma_write_to_sram(mon_bp_addr, rst08, 1);
         mon_bp_installed = 1;
-        install_rst_hook(mmu_bank);
+        install_rst_vector(mmu_bank);
     } else {
         if (mon_bp_installed) {
             printf("Breakpoint is %04lX\n\r", mon_bp_addr);
@@ -747,7 +773,6 @@ int mon_cmd_clearbreakpoint(int argc, char *args[])
         printf("Clear breakpoint at %04lX\n\r", mon_bp_addr);
         dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
         mon_bp_installed = 0;
-        uninstall_rst_hook();
     } else {
         printf("Breakpoint is not set\n\r");
     }
@@ -880,17 +905,17 @@ void mon_leave(void)
     // Save original program
     dma_read_from_sram(phys_addr(pc), &z80_context.saved_prog, size);
 
-    // Insert 'OUT (MON_RESTORE), A'
+    // Insert 'OUT (MON_CLEANUP), A'
     memset(tmp_buf[0], 0, size);  // Fill with NOP
     tmp_buf[0][0] = 0xd3;
-    tmp_buf[0][1] = MON_RESTORE;
+    tmp_buf[0][1] = MON_CLEANUP;
     dma_write_to_sram(phys_addr(pc), tmp_buf[0], size);
 
     // Clear NMI
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
 }
 
-void mon_restore(void)
+void mon_cleanup(void)
 {
     // printf("\n\rCleanup monitor\n\r");
 
@@ -899,9 +924,7 @@ void mon_restore(void)
     uint16_t pc = z80_context.pc - size;
     dma_write_to_sram(phys_addr(pc), &z80_context.saved_prog, size);
     uninstall_nmi_hook();
-    if (!mon_bp_installed) {
-        uninstall_rst_hook();
-    }
+    uninstall_rst_hook();
 
     if (mon_step_execution) {
         invoke_monitor = 1;
