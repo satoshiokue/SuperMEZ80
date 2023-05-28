@@ -212,7 +212,7 @@ void ioexp_init(void)
     //
     // Initialize SPI I/O expander MCP23S08
     //
-    if (mcp23s08_probe(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_100KHZ, 0 /* address */) == 0) {
+    if (mcp23s08_probe(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_2MHZ, 0 /* address */) == 0) {
         printf("SuperMEZ80+SPI with GPIO expander\n\r");
     }
     mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
