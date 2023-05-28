@@ -40,10 +40,13 @@
 static struct MCP23S08 {
     struct SPI *spi;
     int alive;
+    int pending;
     uint16_t clock_delay;
     uint8_t addr;
     uint8_t dir;
     uint8_t olat;
+    uint8_t dir_pending;
+    uint8_t olat_pending;
 } ctx_ = { 0 };
 struct MCP23S08 *MCP23S08_ctx = &ctx_;
 
@@ -91,7 +94,7 @@ static void mcp23S08_reg_write(struct MCP23S08 *ctx, uint8_t reg, uint8_t val)
 {
     struct SPI *spi = ctx->spi;
     uint8_t buf[3];
-    buf[0] = 0x40 | (uint8_t)((ctx->addr) << 1);  // read
+    buf[0] = 0x40 | (uint8_t)((ctx->addr) << 1);  // write
     buf[1] = reg;
     buf[2] = val;
     SPI(begin_transaction)(spi);
@@ -110,6 +113,10 @@ void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, 
 
     SPI(begin)(spi);
     SPI(configure)(spi, clock_delay, SPI_MSBFIRST, SPI_MODE0);
+
+    ctx->pending = 0;
+    mcp23S08_reg_write(ctx, REG_IODIR, ctx->dir);
+    mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
 
     mcp23s08_dump_regs(ctx, "");
 
@@ -173,10 +180,40 @@ int mcp23s08_is_alive(struct MCP23S08 *ctx)
     return ctx->alive;
 }
 
+int mcp23s08_set_pending(struct MCP23S08 *ctx, int pending)
+{
+    int result = ctx->pending;
+    if (!ctx->alive || ctx->pending == !!pending)
+        return result;
+    if (pending) {
+        ctx->dir_pending = ctx->dir;
+        ctx->olat_pending = ctx->olat;
+    } else {
+        if (ctx->dir_pending != ctx->dir) {
+            ctx->dir = ctx->dir_pending;
+            mcp23S08_reg_write(ctx, REG_IODIR, ctx->dir);
+        }
+        if (ctx->olat_pending != ctx->olat) {
+            ctx->olat = ctx->olat_pending;
+            mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
+        }
+    }
+    ctx->pending = !!pending;
+    return result;
+}
+
 void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode)
 {
     if (!ctx->alive)
         return;
+    if (ctx->pending) {
+        if (mode == MCP23S08_PINMODE_OUTPUT) {
+            ctx->dir_pending &= ~(1UL<<gpio);
+        } else {
+            ctx->dir_pending |= (1UL<<gpio);
+        }
+        return;
+    }
     if (mode == MCP23S08_PINMODE_OUTPUT) {
         ctx->dir &= ~(1UL<<gpio);
     } else {
@@ -189,6 +226,14 @@ void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val)
 {
     if (!ctx->alive)
         return;
+    if (ctx->pending) {
+        if (val) {
+            ctx->olat_pending |= (1UL<<gpio);
+        } else {
+            ctx->olat_pending &= ~(1UL<<gpio);
+        }
+        return;
+    }
     if (val) {
         ctx->olat |= (1UL<<gpio);
     } else {
@@ -201,6 +246,10 @@ void mcp23s08_masked_write(struct MCP23S08 *ctx, uint32_t mask, uint32_t val)
 {
     if (!ctx->alive || mask == 0)
         return;
+    if (ctx->pending) {
+        ctx->olat_pending = ((ctx->olat_pending & ~(uint8_t)mask) | (val & (uint8_t)mask));
+        return;
+    }
     ctx->olat = ((ctx->olat & ~(uint8_t)mask) | (val & (uint8_t)mask));
     mcp23S08_reg_write(ctx, REG_OLAT, ctx->olat);
 }

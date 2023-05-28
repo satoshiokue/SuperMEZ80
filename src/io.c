@@ -243,7 +243,6 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     GIE = 0;                    // Disable interrupt
 
     int do_bus_master = 0;
-    int led_on = 0;
     uint8_t io_addr = PORTB;
     uint8_t io_data = PORTC;
 
@@ -433,10 +432,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     //
 
     // turn on the LED
-    led_on = 1;
-    #ifdef GPIO_LED
-    mcp23s08_write(MCP23S08_ctx, GPIO_LED, 0);
-    #endif
+    turn_on_io_led = 1;
 
     uint32_t sector = 0;
     if (num_drives <= disk_drive || drives[disk_drive].filep == NULL) {
@@ -549,10 +545,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
                disk_dmah, disk_dmal, disk_stat);
     }
 
-    #ifdef GPIO_LED
-    if (led_on)  // turn off the LED
-        mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
-    #endif
+    turn_on_io_led = 0;
 
  exit_bus_master:
     if (invoke_monitor) {

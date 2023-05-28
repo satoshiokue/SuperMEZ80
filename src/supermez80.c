@@ -48,6 +48,9 @@ debug_t debug = {
     0,  // disk_mask
 };
 
+// global variable which is handled by dma_acquire_addrbus() and _reelase()
+int turn_on_io_led = 0;
+
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
 #ifdef CPM_MMU_EXERCISE
@@ -115,6 +118,8 @@ void bus_master(int enable)
         TRISB = 0x00;       // A7-A0
     } else {
         // Set address bus as input
+        dma_release_addrbus();
+
         TRISD = 0x7f;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
         TRISB = 0xff;       // A7-A0 pin
         TRISC = 0xff;       // D7-D0 pin

@@ -143,21 +143,32 @@ void dma_acquire_addrbus(uint32_t addr)
             printf("WARNING: no GPIO expander to control higher address\n\r");
         }
     }
+    int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
+    #ifdef GPIO_LED
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
+    #endif
     mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
 
     set_bank_pins(addr);
+    mcp23s08_set_pending(MCP23S08_ctx, pending);
 }
 
 void dma_release_addrbus(void)
 {
+    int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
     // higher address lines must always be driven by MCP23S08
     set_bank_pins((uint32_t)mmu_bank << 16);
+
+    #ifdef GPIO_LED
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
+    #endif
+    mcp23s08_set_pending(MCP23S08_ctx, pending);
 }
 
 void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
@@ -193,8 +204,6 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
         LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
     }
-
-    dma_release_addrbus();
 }
 
 void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
@@ -230,8 +239,6 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
     }
-
-    dma_release_addrbus();
 }
 
 void mmu_bank_config(int nbanks)

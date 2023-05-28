@@ -123,6 +123,7 @@ typedef struct {
 
 extern uint8_t tmp_buf[2][TMP_BUF_SIZE];
 extern debug_t debug;
+extern int turn_on_io_led;
 
 void bus_master(int enable);
 
