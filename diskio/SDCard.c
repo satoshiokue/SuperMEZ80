@@ -44,6 +44,7 @@ static struct SDCard {
     struct SPI *spi;
     uint16_t clock_delay;
     uint16_t timeout;
+    unsigned int calc_read_crc :1;
 } ctx_ = { 0 };
 #define ctx (&ctx_)
 
@@ -59,6 +60,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
     ctx->spi = SPI0_ctx;
     ctx->clock_delay = clock_delay;
     ctx->timeout = timeout;
+    ctx->calc_read_crc = 0;
     struct SPI *spi = ctx->spi;
     SPI(begin)(spi);
 
@@ -203,10 +205,12 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, unsigned int count)
     crc = 0;
     for (int i = 0; i < offs; i++) {
         response = SPI(receive_byte)(spi);
-        crc = __SDCard_crc16(crc, &response, 1);
+        if (ctx->calc_read_crc)
+            crc = __SDCard_crc16(crc, &response, 1);
     }
     SPI(receive)(spi, buf, count);
-    crc = __SDCard_crc16(crc, buf, count);
+    if (ctx->calc_read_crc)
+        crc = __SDCard_crc16(crc, buf, count);
     for (int i = 0; i < 512 - offs - (int)count; i++) {
         response = SPI(receive_byte)(spi);
         crc = __SDCard_crc16(crc, &response, 1);
@@ -217,7 +221,7 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, unsigned int count)
 
     resp_crc = (uint16_t)SPI(receive_byte)(spi) << 8;
     resp_crc |= SPI(receive_byte)(spi);
-    if (resp_crc != crc) {
+    if (ctx->calc_read_crc && resp_crc != crc) {
         dprintf(("SD Card: read512: CRC error (%04x != %04x, retry=%d)\n\r",
                  crc, resp_crc, retry));
         if (--retry < 1) {
