@@ -24,6 +24,8 @@
 #ifndef __MCP23S08_H__
 #define __MCP23S08_H__
 
+#include <SPI.h>
+
 struct MCP23S08;
 extern struct MCP23S08 *MCP23S08_ctx;
 

@@ -40,8 +40,9 @@ typedef struct disas_inst_desc {
     void *ptr;
 } disas_inst_desc_t;
 
-int disas_op(const disas_inst_desc_t *ids, uint8_t *inst, int len, char *buf, int buf_len);
-int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts, int len, int nops,
-              void (*func)(char *line));
+unsigned int disas_op(const disas_inst_desc_t *ids, uint8_t *inst, unsigned int len, char *buf,
+                      unsigned int buf_len);
+unsigned int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts,
+                       unsigned int len, unsigned int nops, void (*func)(char *line));
 
 #endif  // __DISAS_H__

@@ -25,11 +25,11 @@
 #include <stdio.h>
 #include "utils.h"
 
-void util_hexdump(const char *header, void *addr, int size)
+void util_hexdump(const char *header, const void *addr, unsigned int size)
 {
     char chars[17];
-    uint8_t *buf = addr;
-    size = ((size + 15) & ~0xf);
+    const uint8_t *buf = addr;
+    size = ((size + 15) & ~0xfU);
     for (int i = 0; i < size; i++) {
         if ((i % 16) == 0)
             printf("%s%04x:", header, i);
@@ -46,12 +46,12 @@ void util_hexdump(const char *header, void *addr, int size)
     }
 }
 
-void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size)
+void util_addrdump(const char *header, uint32_t addr_offs, const void *addr, unsigned int size)
 {
     char chars[17];
-    uint8_t *buf = addr;
-    size = ((size + 15) & ~0xf);
-    for (int i = 0; i < size; i++) {
+    const uint8_t *buf = addr;
+    size = ((size + 15) & ~0xfU);
+    for (unsigned int i = 0; i < size; i++) {
         if ((i % 16) == 0)
             printf("%s%06lx:", header, addr_offs + i);
         printf(" %02x", buf[i]);
@@ -67,12 +67,12 @@ void util_addrdump(const char *header, uint32_t addr_offs, void *addr, int size)
     }
 }
 
-void util_hexdump_sum(const char *header, void *addr, int size)
+void util_hexdump_sum(const char *header, const void *addr, unsigned int size)
 {
     util_hexdump(header, addr, size);
 
     uint8_t sum = 0;
-    uint8_t *p = addr;
+    const uint8_t *p = addr;
     for (int i = 0; i < size; i++)
         sum += *p++;
     printf("%s%53s CHECKSUM: %02x\n\r", header, "", sum);

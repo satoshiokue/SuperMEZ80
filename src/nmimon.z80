@@ -33,6 +33,9 @@ CONDAT	EQU	1		; console output port
 	DEFS	66H - $, 0	; NOP
 	ORG	0066H		; NMI interrupt vector
 ENTRY:
+	OUT	(171),A		; NMI trap
+	NOP
+
 	LD	(SAVED_REG_SP),SP
 	LD	SP,SAVED_REG_END-2
 	push	AF
@@ -42,7 +45,7 @@ ENTRY:
 	push	IX
 	push	IY
 
-	OUT	(170),A
+	OUT	(172),A		; enter NMI monitor
 
 	pop	IY
 	pop	IX

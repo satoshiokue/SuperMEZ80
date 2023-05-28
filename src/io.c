@@ -27,6 +27,7 @@
 #include <supermez80.h>
 #include <stdio.h>
 #include <ff.h>
+#include <utils.h>
 
 drive_t drives[] = {
     { 26 },
@@ -47,12 +48,13 @@ drive_t drives[] = {
     { 16484 },
 };
 const int num_drives = (sizeof(drives)/sizeof(*drives));
+unsigned int io_output_chars = 0;
 
 // hardware control
 static uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
 
 // key input buffer
-static char key_input_buffer[8];
+static char key_input_buffer[80];
 static unsigned int key_input = 0;
 static unsigned int key_input_buffer_head = 0;
 
@@ -116,6 +118,66 @@ void hw_ctrl_write(uint8_t val)
     }
 }
 
+int cpm_disk_read(unsigned int drive, uint32_t lba, void *buf, unsigned int sectors)
+{
+    unsigned int n;
+    int result = 0;
+    int track, sector;
+
+    if (num_drives <= drive || drives[drive].filep == NULL) {
+        printf("invalid drive %d\n\r", drive);
+        return -1;
+    }
+
+    FIL *filep = drives[drive].filep;
+    FRESULT fres;
+    if ((fres = f_lseek(filep, lba * SECTOR_SIZE)) != FR_OK) {
+        printf("f_lseek(): ERROR %d\n\r", fres);
+        return -1;
+    }
+    while (result < sectors) {
+        if ((fres = f_read(filep, buf, SECTOR_SIZE, &n)) != FR_OK || n != SECTOR_SIZE) {
+            printf("f_read(): ERROR res=%d, n=%d\n\r", fres, n);
+            return result;
+        }
+        buf = (void*)((uint8_t*) + SECTOR_SIZE);
+        lba++;
+        result++;
+    }
+    return result;
+}
+
+int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned int sector, uint32_t *lba)
+{
+    if (lba)
+        *lba = 0xdeadbeefUL;  // fail safe
+    if (num_drives <= drive || drives[drive].filep == NULL) {
+        printf("invalid drive %d\n\r", drive);
+        return -1;
+    }
+    if (lba)
+        *lba = track * drives[drive].sectors + sector - 1;
+    return 0;
+}
+
+int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
+                        uint32_t lba)
+{
+    if (track)
+        *track = 0xdead;  // fail safe
+    if (sector)
+        *sector = 0xbeef;  // fail safe
+    if (num_drives <= drive || drives[drive].filep == NULL) {
+        printf("invalid drive %d\n\r", drive);
+        return -1;
+    }
+    if (track)
+        *track =  (unsigned int)(lba / drives[drive].sectors);
+    if (sector)
+        *sector = (unsigned int)(lba % drives[drive].sectors + 1);
+    return 0;
+}
+
 // Called at UART3 receiving some data
 void __interrupt(irq(default),base(8)) Default_ISR(){
     GIE = 0;                    // Disable interrupt
@@ -177,16 +239,21 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     static uint8_t disk_stat = DISK_ST_ERROR;
     static uint8_t *disk_datap = NULL;
     uint8_t c;
-    union address_bus_u ab;
 
     GIE = 0;                    // Disable interrupt
 
-    ab.l = PORTB;               // Read address low
+    int do_bus_master = 0;
+    int led_on = 0;
+    uint8_t io_addr = PORTB;
+    uint8_t io_data = PORTC;
+
+    if (RA5) {
+        goto io_write;
+    }
 
     // Z80 IO read cycle
-    if(!RA5) {
     TRISC = 0x00;               // Set as output
-    switch (ab.l) {
+    switch (io_addr) {
     case UART_CREG:
         if (key_input) {
             LATC = 0xff;        // input available
@@ -204,11 +271,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
             LATC = *disk_datap++;
-        } else {
-            #ifdef CPM_DISK_DEBUG
-            printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x (READ IGNORED)\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
-            #endif
+        } else
+        if (DEBUG_DISK) {
+            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (READ IGNORED)\n\r",
+                   disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
         }
         break;
     case DISK_REG_FDCST:
@@ -219,111 +285,110 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         break;
     default:
         #ifdef CPM_IO_DEBUG
-        printf("WARNING: unknown I/O read %d (%02XH)\n\r", ab.l, ab.l);
+        printf("WARNING: unknown I/O read %d (%02XH)\n\r", io_addr, io_addr);
         invoke_monitor = 1;
         #endif
         LATC = 0xff;            // Invalid data
         break;
     }
 
-    // Release wait (D-FF reset)
-    G3POL = 1;
-    G3POL = 0;
-
-    // Post processing
-#if 1
-    while(!RA0);                // /IORQ <5.6MHz
-#else
-    while(!RD7);                // /WAIT >=5.6MHz
-#endif
-    TRISC = 0xff;               // Set as input
-    CLC3IF = 0;                 // Clear interrupt flag
-
-    GIE = 1;                    // Enable interrupt
-    return;
+    // Assert /NMI for invoking the monitor before releasing /WAIT.
+    // You can use SPI bus because Z80 is in I/O read instruction and does not drive D0~7 here.
+    if (invoke_monitor) {
+        mon_assert_nmi();
     }
 
+    // Let Z80 read the data
+    LATE0 = 0;                  // /BUSREQ is active
+    G3POL = 1;                  // Release wait (D-FF reset)
+    G3POL = 0;
+    while(!RA0);                // /IORQ
+    TRISC = 0xff;               // Set as input
+
+    if (invoke_monitor) {
+        goto enter_bus_master;
+    } else {
+        goto exit_wait;
+    }
+
+ io_write:
     // Z80 IO write cycle
-    int do_bus_master = 0;
-    int led_on = 0;
-    int io_addr = ab.l;
-    int io_data = PORTC;
-    switch (ab.l) {
+    switch (io_addr) {
     case UART_DREG:
         while(!U3TXIF);
-        U3TXB = PORTC;      // Write into    U3TXB
+        U3TXB = io_data;        // Write into    U3TXB
+        io_output_chars++;
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
-            *disk_datap++ = PORTC;
+            *disk_datap++ = io_data;
             if (DISK_OP_WRITE == DISK_OP_WRITE && (disk_datap - disk_buf) == SECTOR_SIZE) {
                 do_bus_master = 1;
             }
         } else {
-            #ifdef CPM_DISK_DEBUG
-            printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x DATA=%02x (IGNORED)\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, PORTC);
-            #endif
+            if (DEBUG_DISK) {
+                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
+                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            }
         }
         break;
     case DISK_REG_DRIVE:
-        disk_drive = PORTC;
+        disk_drive = io_data;
         break;
     case DISK_REG_TRACK:
-        disk_track = PORTC;
+        disk_track = io_data;
         break;
     case DISK_REG_SECTOR:
-        disk_sector = (disk_sector & 0xff00) | PORTC;
+        disk_sector = (disk_sector & 0xff00) | io_data;
         break;
     case DISK_REG_SECTORH:
-        disk_sector = (disk_sector & 0x00ff) | (PORTC << 8);
+        disk_sector = (disk_sector & 0x00ff) | ((uint16_t)io_data << 8);
         break;
     case DISK_REG_FDCOP:
-        disk_op = PORTC;
+        disk_op = io_data;
         if (disk_op == DISK_OP_WRITE) {
             disk_datap = disk_buf;
         } else {
             do_bus_master = 1;
         }
-        #ifdef CPM_DISK_DEBUG_VERBOSE
-        printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ...\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
-        #endif
+        if ((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
+            (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) {
+            if (DEBUG_DISK_VERBOSE) {
+                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x ... \n\r", disk_op,
+                       disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            }
+        }
         break;
     case DISK_REG_DMAL:
-        disk_dmal = PORTC;
+        disk_dmal = io_data;
         break;
     case DISK_REG_DMAH:
-        disk_dmah = PORTC;
+        disk_dmah = io_data;
         break;
     case MMU_INIT:
-        mmu_bank_config(PORTC);
-        break;
     case MMU_BANK_SEL:
         do_bus_master = 1;
         break;
     case HW_CTRL:
-        hw_ctrl_write(PORTC);
+        hw_ctrl_write(io_data);
         break;
-    case MON_ENTER:
-    case MON_RESTORE:
-    case MON_BREAK:
+    case MON_NMI_PREP:
+    case MON_NMI_ENTER:
+    case MON_RST08_PREP:
+    case MON_RST08_ENTER:
+    case MON_CLEANUP:
         do_bus_master = 1;
         break;
     default:
         #ifdef CPM_IO_DEBUG
-        printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", ab.l, PORTC, ab.l, PORTC);
+        printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", io_addr, io_data, io_addr,
+               io_data);
         invoke_monitor = 1;
         #endif
         break;
     }
     if (!do_bus_master && !invoke_monitor) {
-        // Release wait (D-FF reset)
-        G3POL = 1;
-        G3POL = 0;
-        CLC3IF = 0;         // Clear interrupt flag
-        GIE = 1;            // Enable interrupt
-        return;
+        goto exit_wait;
     }
 
     //
@@ -332,26 +397,35 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     LATE0 = 0;          // /BUSREQ is active
     G3POL = 1;          // Release wait (D-FF reset)
     G3POL = 0;
+    while(!RA0);        // /IORQ
 
+ enter_bus_master:
     bus_master(1);
 
     if (!do_bus_master) {
-        goto io_exit;
+        goto exit_bus_master;
     }
 
     switch (io_addr) {
+    case MMU_INIT:
+        mmu_bank_config(io_data);
+        goto exit_bus_master;
     case MMU_BANK_SEL:
         mmu_bank_select(io_data);
-        goto io_exit;
-    case MON_ENTER:
-    case MON_BREAK:
-        mon_enter(io_addr == MON_ENTER /* NMI or not*/);
-        while (!mon_step_execution && !mon_prompt());
+        goto exit_bus_master;
+    case MON_NMI_PREP:
+    case MON_RST08_PREP:
+        mon_prepare(io_addr == MON_NMI_PREP /* NMI or not*/);
+        goto exit_bus_master;
+    case MON_NMI_ENTER:
+    case MON_RST08_ENTER:
+        mon_enter(io_addr == MON_NMI_ENTER /* NMI or not*/);
+        while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
-        goto io_exit;
-    case MON_RESTORE:
-        mon_restore();
-        goto io_exit;
+        goto exit_bus_master;
+    case MON_CLEANUP:
+        mon_cleanup();
+        goto exit_bus_master;
     }
 
     //
@@ -364,16 +438,18 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, 0);
     #endif
 
+    uint32_t sector = 0;
     if (num_drives <= disk_drive || drives[disk_drive].filep == NULL) {
         disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
 
-    uint32_t sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
+    sector = disk_track * drives[disk_drive].sectors + disk_sector - 1;
     FIL *filep = drives[disk_drive].filep;
     unsigned int n;
-    if (f_lseek(filep, sector * SECTOR_SIZE) != FR_OK) {
-        printf("f_lseek(): ERROR\n\r");
+    FRESULT fres;
+    if ((fres = f_lseek(filep, sector * SECTOR_SIZE)) != FR_OK) {
+        printf("f_lseek(): ERROR %d\n\r", fres);
         disk_stat = DISK_ST_ERROR;
         goto disk_io_done;
     }
@@ -383,15 +459,15 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         //
 
         // read from the DISK
-        if (f_read(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
-            printf("f_read(): ERROR\n\r");
+        if ((fres = f_read(filep, disk_buf, SECTOR_SIZE, &n)) != FR_OK || n != SECTOR_SIZE) {
+            printf("f_read(): ERROR res=%d, n=%d\n\r", fres, n);
             disk_stat = DISK_ST_ERROR;
             goto disk_io_done;
         }
 
-        #ifdef CPM_DISK_DEBUG_VERBOSE
-        util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
-        #endif
+        if (DEBUG_DISK_READ && DEBUG_DISK_VERBOSE && !(debug.disk_mask & (1 << disk_drive))) {
+            util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
+        }
 
         if (disk_op == DISK_OP_DMA_READ) {
             //
@@ -440,9 +516,18 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
             // writing data 128 bytes are in the buffer already
         }
 
+        if (DEBUG_DISK_WRITE && DEBUG_DISK_VERBOSE && !(debug.disk_mask & (1 << disk_drive))) {
+            util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
+        }
+
         // write buffer to the DISK
-        if (f_write(filep, disk_buf, SECTOR_SIZE, &n) != FR_OK) {
-            printf("f_write(): ERROR\n\r");
+        if ((fres = f_write(filep, disk_buf, SECTOR_SIZE, &n)) != FR_OK || n != SECTOR_SIZE) {
+            printf("f_write(): ERROR res=%d, n=%d\n\r", fres, n);
+            disk_stat = DISK_ST_ERROR;
+            goto disk_io_done;
+        }
+        if ((fres = f_sync(filep)) != FR_OK) {
+            printf("f_sync(): ERROR %d\n\r", fres);
             disk_stat = DISK_ST_ERROR;
             goto disk_io_done;
         }
@@ -456,24 +541,31 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     }
 
  disk_io_done:
-    #ifdef CPM_DISK_DEBUG
-    printf("DISK: OP=%02x D/T/S=%d/%d/%d ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
-           disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal, disk_stat);
-    #endif
+    if (((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
+         (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) &&
+        !(debug.disk_mask & (1 << disk_drive))) {
+        printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
+               disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
+               disk_dmah, disk_dmal, disk_stat);
+    }
 
     #ifdef GPIO_LED
     if (led_on)  // turn off the LED
         mcp23s08_write(MCP23S08_ctx, GPIO_LED, 1);
     #endif
 
- io_exit:
+ exit_bus_master:
     if (invoke_monitor) {
         invoke_monitor = 0;
         mon_setup();
     }
 
     bus_master(0);
+
+ exit_wait:
     LATE0 = 1;              // /BUSREQ is deactive
+    G3POL = 1;              // Release wait (D-FF reset)
+    G3POL = 0;
 
     CLC3IF = 0;             // Clear interrupt flag
     GIE = 1;                // Enable interrupt

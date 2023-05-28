@@ -25,13 +25,16 @@
 #include <disas.h>
 #include <disas_z80.h>
 
-int disas_op(const disas_inst_desc_t *ids, uint8_t *insts, int len, char *buf, int buf_len)
+unsigned int disas_op(const disas_inst_desc_t *ids, uint8_t *insts, unsigned int len, char *buf,
+             unsigned int buf_len)
 {
     const disas_inst_desc_t *ent;
     uint8_t *pc = insts;
     uint16_t operand;
-    int result;
+    unsigned int result;
 
+    if (len == 0)
+        return 0;
     for (ent = ids; ent->attr != DISAS_END; ent++) {
         if (ent->op == *pc) {
             break;
@@ -43,15 +46,19 @@ int disas_op(const disas_inst_desc_t *ids, uint8_t *insts, int len, char *buf, i
     }
     switch (ent->attr) {
     case DISAS_OPERAND_0:
-        sprintf(buf, (char*)ent->ptr);
+        sprintf(buf, "%s", (char*)ent->ptr);
         result = 1;
         break;
     case DISAS_OPERAND_1:
+        if (len < 2)
+            return 0;
         operand = *++pc;
         sprintf(buf, (char*)ent->ptr, operand);
         result = 2;
         break;
     case DISAS_OPERAND_2:
+        if (len < 3)
+            return 0;
         operand = ((uint16_t)pc[2] << 8) + pc[1];
         sprintf(buf, (char*)ent->ptr, operand);
         result = 3;
@@ -64,15 +71,15 @@ int disas_op(const disas_inst_desc_t *ids, uint8_t *insts, int len, char *buf, i
     return result;
 }
 
-int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts, int len, int nops,
-              void (*func)(char *line))
+unsigned int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts,
+                       unsigned int len, unsigned int nops, void (*func)(char *line))
 {
-    int n;
-    int result = 0;
+    unsigned int n;
+    unsigned int result = 0;
     char buf[100];
 
-    while (0 < len && 0 < nops) {
-        n = disas_op(ids, insts, len, buf, sizeof(buf));
+    while (result < len && 0 < nops) {
+        n = disas_op(ids, insts, len - result, buf, sizeof(buf));
         if (n == 0) {
             break;
         }
@@ -88,9 +95,8 @@ int disas_ops(const disas_inst_desc_t *ids, uint32_t addr, uint8_t *insts, int l
             printf("%s\n\r", buf);
         }
         result += n;
-        addr += n;
+        addr += (unsigned)n;
         insts += n;
-        len -= n;
         nops--;
     }
 

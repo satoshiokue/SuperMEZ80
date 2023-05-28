@@ -16,8 +16,7 @@
 // Configlations
 //
 
-//#define CPM_DISK_DEBUG
-//#define CPM_DISK_DEBUG_VERBOSE
+#define ENABLE_DISK_DEBUG
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
 //#define CPM_MMU_DEBUG
@@ -28,7 +27,7 @@
 
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
-#define NUM_FILES        8
+#define NUM_FILES        6
 #define SECTOR_SIZE      128
 #define TMP_BUF_SIZE     256
 
@@ -80,11 +79,17 @@
 #define HW_CTRL_RESET        (1 << 6)
 #define HW_CTRL_HALT         (1 << 7)
 
-#define MON_ENTER        170    // enter monitor mode
-#define MON_RESTORE      171    // clean up monitor mode
-#define MON_BREAK        172    // hit break point
+#define MON_CLEANUP      170    // clean up monitor mode
+#define MON_NMI_PREP     171    // NMI preparation
+#define MON_NMI_ENTER    172    // NMI monitor
+#define MON_RST08_PREP   173    // RST08 preparation
+#define MON_RST08_ENTER  174    // RST08 monitor
 
 #define MMU_INVALID_BANK 0xff
+
+#define MON_CMD_OK   0
+#define MON_CMD_EXIT 1
+#define MON_CMD_ERROR -1
 
 //
 // Type definitions
@@ -104,34 +109,54 @@ typedef struct {
     FIL *filep;
 } drive_t;
 
+typedef struct {
+    uint8_t disk;
+    uint8_t disk_read;
+    uint8_t disk_write;
+    uint8_t disk_verbose;
+    uint16_t disk_mask;
+} debug_t;
+
 //
 // Global variables and function prototypes
 //
 
 extern uint8_t tmp_buf[2][TMP_BUF_SIZE];
+extern debug_t debug;
 
 void bus_master(int enable);
 
 // io
+extern char getch(void);
+extern void ungetch(char c);
 extern drive_t drives[];
 extern const int num_drives;
+extern unsigned int io_output_chars;
+extern int cpm_disk_read(unsigned int drive, uint32_t lba, void *buf, unsigned int sectors);
+extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned int sector,
+                             uint32_t *lba);
+extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
+                               uint32_t lba);
 
 // monitor
 extern int invoke_monitor;
 extern unsigned int mon_step_execution;
 
 void mon_init(void);
+void mon_assert_nmi(void);
 void mon_setup(void);
+void mon_prepare(int nmi);
 void mon_enter(int nmi);
 int mon_prompt(void);
 void mon_leave(void);
-void mon_restore(void);
+void mon_cleanup(void);
 
 // memory
 extern int mmu_bank;
-extern uint32_t mmu_num_banks;
+extern int mmu_num_banks;
 extern uint32_t mmu_mem_size;
 extern void (*mmu_bank_select_callback)(int from, int to);
+extern void (*mmu_bank_config_callback)(void);
 
 extern void mem_init(void);
 #define bank_phys_addr(bank, addr) (((uint32_t)(bank) << 16) + (addr))
@@ -139,9 +164,24 @@ extern void mem_init(void);
 extern void set_bank_pins(uint32_t addr);
 extern void dma_acquire_addrbus(uint32_t addr);
 extern void dma_release_addrbus(void);
-extern void dma_write_to_sram(uint32_t dest, void *buf, int len);
-extern void dma_read_from_sram(uint32_t src, void *buf, int len);
+extern void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len);
+extern void dma_read_from_sram(uint32_t src, void *buf, unsigned int len);
 extern void mmu_bank_config(int nbanks);
 extern void mmu_bank_select(int bank);
+
+//
+// debug macros
+//
+#ifdef ENABLE_DISK_DEBUG
+#define DEBUG_DISK (debug.disk || debug.disk_read || debug.disk_write || debug.disk_verbose)
+#define DEBUG_DISK_READ (debug.disk_read)
+#define DEBUG_DISK_WRITE (debug.disk_write)
+#define DEBUG_DISK_VERBOSE (debug.disk_verbose)
+#else
+#define DEBUG_DISK 0
+#define DEBUG_READ 0
+#define DEBUG_WRITE 0
+#define DEBUG_DISK_VERBOSE 0
+#endif
 
 #endif  // __SUPERMEZ80_H__

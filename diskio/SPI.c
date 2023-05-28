@@ -30,19 +30,19 @@
 
 #include <picconfig.h>
 
-static struct SPI_SW {
+struct SPI_SW {
     struct SPI spi;
     uint8_t clk_phase;
     uint8_t clk_polarity;
     uint8_t bit_order;
     uint8_t trisc;
-    uint8_t clock_delay;
-    void (*send)(struct SPI *ctx_, void *buf, int count);
-    void (*receive)(struct SPI *ctx_, void *buf, int count);
+    uint16_t clock_delay;
+    void (*send)(struct SPI *ctx_, const void *buf, unsigned int count);
+    void (*receive)(struct SPI *ctx_, void *buf, unsigned int count);
 };
 
-static void SPI(send_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, int count);
-static void SPI(receive_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, int count);
+static void SPI(send_mode0_msbfirst_nowait)(struct SPI *ctx_, const void *buf, unsigned int count);
+static void SPI(receive_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, unsigned int count);
 
 void SPI(begin)(struct SPI *ctx_)
 {
@@ -97,7 +97,7 @@ static uint8_t SPI_reverse_bit_order(uint8_t val)
 }
 
 #define SPI_clock_delay() do { \
-        for (volatile uint_fast8_t i = ctx->clock_delay; i != 0; i--) ;  \
+        for (volatile uint_fast8_t i = (uint_fast8_t)ctx->clock_delay; i != 0; i--) ; \
     } while(0)
 
 uint8_t SPI(transfer_byte)(struct SPI *ctx_, uint8_t output)
@@ -117,19 +117,19 @@ uint8_t SPI(transfer_byte)(struct SPI *ctx_, uint8_t output)
 
         if (ctx->clk_phase) {
             // read input data at second edge if clock phase (CPHA) is 1
-            SPI(CLK) = (clk ^= 1);
+            SPI(CLK) = (clk ^= 1) & 0x1;
             SPI_clock_delay();
         }
 
-        SPI(CLK) = (clk ^= 1);
+        SPI(CLK) = (clk ^= 1) & 0x1;
 
         // read intput data
-        input = (input << 1) | SPI(POCI);
+        input = (uint8_t)(input << 1) | SPI(POCI);
         SPI_clock_delay();
 
         if (!ctx->clk_phase) {
             // read input data at first edge if clock phase (CPHA) is 0
-            SPI(CLK) = (clk ^= 1);
+            SPI(CLK) = (clk ^= 1) & 0x1;
             SPI_clock_delay();
         }
     }
@@ -141,7 +141,7 @@ uint8_t SPI(transfer_byte)(struct SPI *ctx_, uint8_t output)
     return input;
 }
 
-void SPI(transfer)(struct SPI *ctx_, void *buf, int count)
+void SPI(transfer)(struct SPI *ctx_, void *buf, unsigned int count)
 {
     uint8_t *p = (uint8_t*)buf;
     for (int i = 0; i < count; i++) {
@@ -150,7 +150,7 @@ void SPI(transfer)(struct SPI *ctx_, void *buf, int count)
     }
 }
 
-static void SPI(send_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, int count)
+static void SPI(send_mode0_msbfirst_nowait)(struct SPI *ctx_, const void *buf, unsigned int count)
 {
     uint8_t *p = (uint8_t*)buf;
     uint8_t *endp = p + count;
@@ -208,7 +208,7 @@ static void SPI(send_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, int cou
     }
 }
 
-static void SPI(receive_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, int count)
+static void SPI(receive_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, unsigned int count)
 {
     uint8_t *p = (uint8_t*)buf;
     uint8_t *endp = p + count;
@@ -269,7 +269,7 @@ static void SPI(receive_mode0_msbfirst_nowait)(struct SPI *ctx_, void *buf, int 
     }
 }
 
-void SPI(send)(struct SPI *ctx_, void *buf, int count)
+void SPI(send)(struct SPI *ctx_, const void *buf, unsigned int count)
 {
     struct SPI_SW *ctx = (struct SPI_SW *)ctx_;
     if (ctx->send) {
@@ -283,7 +283,7 @@ void SPI(send)(struct SPI *ctx_, void *buf, int count)
     }
 }
 
-void SPI(receive)(struct SPI *ctx_, void *buf, int count)
+void SPI(receive)(struct SPI *ctx_, void *buf, unsigned int count)
 {
     struct SPI_SW *ctx = (struct SPI_SW *)ctx_;
     if (ctx->receive) {

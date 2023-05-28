@@ -40,6 +40,13 @@ static FILINFO fileinfo;
 static FIL files[NUM_FILES];
 static int num_files = 0;
 uint8_t tmp_buf[2][TMP_BUF_SIZE];
+debug_t debug = {
+    0,  // disk
+    0,  // disk_read
+    0,  // disk_write
+    0,  // disk_verbose
+    0,  // disk_mask
+};
 
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
@@ -213,7 +220,8 @@ void ioexp_init(void)
 
 int disk_init(void)
 {
-    unsigned int i;
+    int i;
+    unsigned int drive;
 
     //
     // Initialize SD Card
@@ -254,7 +262,7 @@ int disk_init(void)
         printf("Select: ");
         while (1) {
             char c = getch();       // Wait for input char
-            if ('0' <= c && c <= '9' && c - '0' <= i) {
+            if ('0' <= c && c <= '9' && c - '0' < i) {
                 selection = c - '0';
                 break;
             }
@@ -281,9 +289,9 @@ int disk_init(void)
     //
     // Open disk images
     //
-    for (unsigned int drive = 0; drive < num_drives && num_files < NUM_FILES; drive++) {
-        char drive_letter = 'A' + drive;
-        char buf[22];
+    for (drive = 0; drive < num_drives && num_files < NUM_FILES; drive++) {
+        char drive_letter = (char)('A' + drive);
+        char * const buf = (char *)tmp_buf[0];
         sprintf(buf, "%s/DRIVE%c.DSK", fileinfo.fname, drive_letter);
         if (f_open(&files[num_files], buf, FA_READ|FA_WRITE) == FR_OK) {
             printf("Image file %s/DRIVE%c.DSK is assigned to drive %c\n\r",

@@ -12,9 +12,10 @@
 
 // MMU
 int mmu_bank = 0;
-uint32_t mmu_num_banks = 0;
+int mmu_num_banks = 0;
 uint32_t mmu_mem_size = 0;
 void (*mmu_bank_select_callback)(int from, int to) = NULL;
+void (*mmu_bank_config_callback)(void) = NULL;
 
 void mem_init()
 {
@@ -34,7 +35,7 @@ void mem_init()
 
 #ifdef CPM_MMU_EXERCISE
     mmu_mem_size = 0x80000;
-    mmu_num_banks = mmu_mem_size / 0x10000;
+    mmu_num_banks = (int)(mmu_mem_size / 0x10000);
     memset(tmp_buf[0], 0, TMP_BUF_SIZE * 2);
     for (addr = 0; addr < mmu_mem_size; addr += TMP_BUF_SIZE * 2) {
         dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE * 2);
@@ -101,7 +102,7 @@ void mem_init()
     }
     #endif  // CPM_MMU_DEBUG
 
-    mmu_num_banks = mmu_mem_size / 0x10000;
+    mmu_num_banks = (int)(mmu_mem_size / 0x10000);
     printf("Memory 000000 - %06lXH %d KB OK\r\n", addr, (int)(mmu_mem_size / 1024));
 #endif  // !CPM_MMU_EXERCISE
 }
@@ -159,11 +160,11 @@ void dma_release_addrbus(void)
     set_bank_pins((uint32_t)mmu_bank << 16);
 }
 
-void dma_write_to_sram(uint32_t dest, void *buf, int len)
+void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
 {
     uint16_t addr = (dest & LOW_ADDR_MASK);
     uint16_t second_half = 0;
-    int i;
+    unsigned int i;
     union address_bus_u ab;
 
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
@@ -196,11 +197,11 @@ void dma_write_to_sram(uint32_t dest, void *buf, int len)
     dma_release_addrbus();
 }
 
-void dma_read_from_sram(uint32_t src, void *buf, int len)
+void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
 {
     uint16_t addr = (src & LOW_ADDR_MASK);
     uint16_t second_half = 0;
-    int i;
+    unsigned int i;
     union address_bus_u ab;
 
     if ((uint32_t)LOW_ADDR_MASK + 1 < (uint32_t)addr + len)
@@ -240,6 +241,8 @@ void mmu_bank_config(int nbanks)
     #endif
     if (mmu_num_banks < nbanks)
         printf("WARNING: too many banks requested. (request is %d)\n\r", nbanks);
+    if (mmu_bank_config_callback)
+        (*mmu_bank_config_callback)();
 }
 
 void mmu_bank_select(int bank)

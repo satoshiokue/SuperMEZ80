@@ -21,15 +21,13 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __UTILS_H__
-#define __UTILS_H__
+#ifndef __FATDISK_DEBUG_H__
+#define __FATDISK_DEBUG_H__
 
-#define UTIL_MIN(a, b) ((a) < (b) ? (a) : (b))
-#define UTIL_MAX(a, b) ((a) > (b) ? (a) : (b))
-#define UTIL_ARRAYSIZEOF(a) (sizeof(a)/sizeof(*(a)))
+extern int fatdisk_debug(int debug);
+#define FATDISK_DEBUG         (1 << 0)
+#define FATDISK_DEBUG_READ    (1 << 1)
+#define FATDISK_DEBUG_WRITE   (1 << 2)
+#define FATDISK_DEBUG_VERBOSE (1 << 3)
 
-void util_hexdump(const char *header, const void *addr, unsigned int size);
-void util_hexdump_sum(const char *header, const void *addr, unsigned int size);
-void util_addrdump(const char *header, uint32_t addr_offs, const void *addr, unsigned int size);
-
-#endif  // __UTILS_H__
+#endif  // __FATDISK_DEBUG_H__
