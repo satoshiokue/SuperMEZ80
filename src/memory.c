@@ -183,26 +183,31 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
 
     dma_acquire_addrbus(dest);
     TRISC = 0x00;       // Set as output to write to the SRAM
+    ab.w = addr;
+    LATD = ab.h;
+    LATB = ab.l;
     for(i = 0; i < len - second_half; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA2 = 0;      // activate /WE
         LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
 
     if (0 < second_half)
         dma_acquire_addrbus(dest + i);
     for( ; i < len; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA2 = 0;      // activate /WE
         LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
 }
 
@@ -218,26 +223,31 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
 
     dma_acquire_addrbus(src);
     TRISC = 0xff;       // Set as input to read from the SRAM
+    ab.w = addr;
+    LATD = ab.h;
+    LATB = ab.l;
     for(i = 0; i < len - second_half; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA4 = 0;      // activate /OE
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
 
     if (0 < second_half)
         dma_acquire_addrbus(src + i);
     for( ; i < len; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA4 = 0;      // activate /OE
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
 }
 
