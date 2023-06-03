@@ -48,6 +48,9 @@ debug_t debug = {
     0,  // disk_mask
 };
 
+// global variable which is handled by dma_acquire_addrbus() and _reelase()
+int turn_on_io_led = 0;
+
 const unsigned char rom[] = {
 // Initial program loader at 0x0000
 #ifdef CPM_MMU_EXERCISE
@@ -99,7 +102,15 @@ void main(void)
     printf("\n\r");
     start_z80();
 
-    while(1);  // All things come to those who wait
+    U3RXIE = 1;          // Receiver interrupt enable
+    GIE = 1;             // Global interrupt enable
+    CLC3IE = 0;          // NOTE: CLC3 interrupt is not enabled. This will be handled by polling.
+
+    while(1) {
+         // Wait for IO access
+        while (!CLC3IF && !invoke_monitor);
+        io_handle();
+    }
 }
 
 void bus_master(int enable)
@@ -115,6 +126,8 @@ void bus_master(int enable)
         TRISB = 0x00;       // A7-A0
     } else {
         // Set address bus as input
+        dma_release_addrbus();
+
         TRISD = 0x7f;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
         TRISB = 0xff;       // A7-A0 pin
         TRISC = 0xff;       // D7-D0 pin
@@ -207,7 +220,7 @@ void ioexp_init(void)
     //
     // Initialize SPI I/O expander MCP23S08
     //
-    if (mcp23s08_probe(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_100KHZ, 0 /* address */) == 0) {
+    if (mcp23s08_probe(MCP23S08_ctx, SPI1_ctx, SPI_CLOCK_2MHZ, 0 /* address */) == 0) {
         printf("SuperMEZ80+SPI with GPIO expander\n\r");
     }
     mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
@@ -414,6 +427,7 @@ void start_z80(void)
     CLCnCON = 0x8c;      // Select D-FF, falling edge inturrupt
 
     CLCDATA = 0x0;       // Clear all CLC outs
+    CLC3IF = 0;          // Clear the CLC interrupt flag
 
     // Unlock IVT
     IVTLOCK = 0x55;
@@ -428,13 +442,7 @@ void start_z80(void)
     IVTLOCK = 0xAA;
     IVTLOCKbits.IVTLOCKED = 0x01;
 
-    // CLC VI enable
-    CLC3IF = 0;          // Clear the CLC interrupt flag
-    CLC3IE = 1;          // Enabling CLC3 interrupt
-
     // Z80 start
-    U3RXIE = 1;          // Receiver interrupt enable
-    GIE = 1;             // Global interrupt enable
     LATE0 = 1;           // /BUSREQ=1
     LATE1 = 1;           // Release reset
 }

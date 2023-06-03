@@ -143,21 +143,32 @@ void dma_acquire_addrbus(uint32_t addr)
             printf("WARNING: no GPIO expander to control higher address\n\r");
         }
     }
+    int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
+    #ifdef GPIO_LED
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
+    #endif
     mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
 
     set_bank_pins(addr);
+    mcp23s08_set_pending(MCP23S08_ctx, pending);
 }
 
 void dma_release_addrbus(void)
 {
+    int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
     // higher address lines must always be driven by MCP23S08
     set_bank_pins((uint32_t)mmu_bank << 16);
+
+    #ifdef GPIO_LED
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
+    #endif
+    mcp23s08_set_pending(MCP23S08_ctx, pending);
 }
 
 void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
@@ -172,29 +183,32 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
 
     dma_acquire_addrbus(dest);
     TRISC = 0x00;       // Set as output to write to the SRAM
+    ab.w = addr;
+    LATD = ab.h;
+    LATB = ab.l;
     for(i = 0; i < len - second_half; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA2 = 0;      // activate /WE
         LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
 
     if (0 < second_half)
         dma_acquire_addrbus(dest + i);
     for( ; i < len; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA2 = 0;      // activate /WE
         LATC = ((uint8_t*)buf)[i];
         LATA2 = 1;      // deactivate /WE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
-
-    dma_release_addrbus();
 }
 
 void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
@@ -209,29 +223,32 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
 
     dma_acquire_addrbus(src);
     TRISC = 0xff;       // Set as input to read from the SRAM
+    ab.w = addr;
+    LATD = ab.h;
+    LATB = ab.l;
     for(i = 0; i < len - second_half; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA4 = 0;      // activate /OE
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
 
     if (0 < second_half)
         dma_acquire_addrbus(src + i);
     for( ; i < len; i++) {
-        ab.w = addr;
-        LATD = ab.h;
-        LATB = ab.l;
-        addr++;
         LATA4 = 0;      // activate /OE
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
+        LATB = ++ab.l;
+        if (ab.l == 0) {
+            ab.h++;
+            LATD = ab.h;
+        }
     }
-
-    dma_release_addrbus();
 }
 
 void mmu_bank_config(int nbanks)

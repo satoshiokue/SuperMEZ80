@@ -35,6 +35,7 @@ extern struct MCP23S08 *MCP23S08_ctx;
 void mcp23s08_init(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, uint8_t addr);
 int mcp23s08_probe(struct MCP23S08 *ctx, struct SPI *spi, uint16_t clock_delay, uint8_t addr);
 int mcp23s08_is_alive(struct MCP23S08 *ctx);
+int mcp23s08_set_pending(struct MCP23S08 *ctx, int pending);
 void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode);
 void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val);
 void mcp23s08_masked_write(struct MCP23S08 *ctx, uint32_t mask, uint32_t val);
