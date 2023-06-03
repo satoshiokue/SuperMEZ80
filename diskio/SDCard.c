@@ -27,7 +27,7 @@
 #include "SDCard.h"
 #include "utils.h"
 
-#define SPI_PREFIX SPI0
+#define SPI_PREFIX SPI2
 
 #define DEBUG
 #if defined(DEBUG)

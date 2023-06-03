@@ -16,7 +16,8 @@ BUILD_DIR := $(PJ_DIR)/build
 CPM2_DIR := $(PJ_DIR)/cpm2
 
 FATFS_SRCS := $(FATFS_DIR)/source/ff.c
-DISK_SRCS := $(DISKIO_DIR)/SDCard.c $(DISKIO_DIR)/SPI0.c $(DISKIO_DIR)/SPI1.c \
+DISK_SRCS := $(DISKIO_DIR)/SDCard.c \
+    $(DISKIO_DIR)/SPI0.c $(DISKIO_DIR)/SPI1.c $(DISKIO_DIR)/SPI2.c \
     $(DISKIO_DIR)/mcp23s08.c \
     $(DISKIO_DIR)/diskio.c $(DISKIO_DIR)/utils.c
 SRCS := $(SRC_DIR)/supermez80.c $(SRC_DIR)/disas.c $(SRC_DIR)/disas_z80.c $(SRC_DIR)/memory.c \
@@ -28,7 +29,8 @@ HDRS := $(SRC_DIR)/supermez80.h $(SRC_DIR)/picconfig.h \
         $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/SPI.h $(DISKIO_DIR)/SDCard.h $(DISKIO_DIR)/mcp23s08.h \
         $(SRC_DIR)/disas.h $(SRC_DIR)/disas_z80.h \
         $(BUILD_DIR)/ipl.inc $(BUILD_DIR)/nmimon.inc \
-        $(BUILD_DIR)/rstmon.inc $(BUILD_DIR)/mmu_exercise.inc 
+        $(BUILD_DIR)/rstmon.inc $(BUILD_DIR)/mmu_exercise.inc \
+        $(DISKIO_DIR)/pic18f47q43_spi.c
 
 all: $(BUILD_DIR)/supermez80.hex $(BUILD_DIR)/drivea.dsk
 
