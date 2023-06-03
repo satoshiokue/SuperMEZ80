@@ -102,7 +102,15 @@ void main(void)
     printf("\n\r");
     start_z80();
 
-    while(1);  // All things come to those who wait
+    U3RXIE = 1;          // Receiver interrupt enable
+    GIE = 1;             // Global interrupt enable
+    CLC3IE = 0;          // NOTE: CLC3 interrupt is not enabled. This will be handled by polling.
+
+    while(1) {
+         // Wait for IO access
+        while (!CLC3IF && !invoke_monitor);
+        io_handle();
+    }
 }
 
 void bus_master(int enable)
@@ -419,6 +427,7 @@ void start_z80(void)
     CLCnCON = 0x8c;      // Select D-FF, falling edge inturrupt
 
     CLCDATA = 0x0;       // Clear all CLC outs
+    CLC3IF = 0;          // Clear the CLC interrupt flag
 
     // Unlock IVT
     IVTLOCK = 0x55;
@@ -433,13 +442,7 @@ void start_z80(void)
     IVTLOCK = 0xAA;
     IVTLOCKbits.IVTLOCKED = 0x01;
 
-    // CLC VI enable
-    CLC3IF = 0;          // Clear the CLC interrupt flag
-    CLC3IE = 1;          // Enabling CLC3 interrupt
-
     // Z80 start
-    U3RXIE = 1;          // Receiver interrupt enable
-    GIE = 1;             // Global interrupt enable
     LATE0 = 1;           // /BUSREQ=1
     LATE1 = 1;           // Release reset
 }

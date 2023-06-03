@@ -259,6 +259,9 @@ void mon_enter(int nmi)
     static unsigned int prev_output_chars = 0;
     uint16_t stack_addr;
 
+    // wait for console output buffer empty
+    con_flush_buffer();
+
     // new line if some output from the target
     if (prev_output_chars != io_output_chars) {
         printf("\n\r");
@@ -334,9 +337,12 @@ void edit_line(char *line, unsigned int maxlen, unsigned int start, unsigned int
             printf("%c", line[pos - 1]);
         }
 
-        int c = getch();
+        int c = getch_buffered();
         refresh = 1;
         switch (c) {
+        case 0x00:
+            invoke_monitor = 0;
+            continue;
         case 0x01:
             pos = start;
             continue;

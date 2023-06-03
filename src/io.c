@@ -53,10 +53,13 @@ unsigned int io_output_chars = 0;
 // hardware control
 static uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
 
-// key input buffer
+// console input/output buffers
 static char key_input_buffer[80];
 static unsigned int key_input = 0;
 static unsigned int key_input_buffer_head = 0;
+static char con_output_buffer[80];
+static unsigned int con_output = 0;
+static unsigned int con_output_buffer_head = 0;
 
 static uint8_t disk_buf[SECTOR_SIZE];
 
@@ -68,31 +71,72 @@ void putch(char c) {
 
 // UART3 Recive
 char getch(void) {
+    while(!U3RXIF);             // Wait for Rx interrupt flag set
+    return U3RXB;               // Read data
+}
+
+// Shall be called with disabling the interrupt
+void __con_flush_buffer(void) {
+    while (0 < con_output && U3TXIF) {
+        U3TXB = con_output_buffer[con_output_buffer_head];
+        con_output_buffer_head = ((con_output_buffer_head + 1) % sizeof(con_output_buffer));
+        con_output--;
+    }
+}
+
+void con_flush_buffer(void) {
+    while (0 < con_output)
+        __delay_ms(50);
+}
+
+void putch_buffered(char c) {
+    GIE = 0;                    // Disable interrupt
+    if (sizeof(con_output_buffer) <= con_output) {
+        while(!U3TXIF);
+        __con_flush_buffer();
+    }
+    con_output_buffer[((con_output_buffer_head + con_output) % sizeof(con_output_buffer))] = c;
+    con_output++;
+    U3TXIE = 1;                 // Enable Tx interrupt
+    GIE = 1;                    // Enable interrupt
+}
+
+char getch_buffered(void) {
     char res;
     while (1) {
+        GIE = 0;                // Disable interrupt
         if (0 < key_input) {
             res = key_input_buffer[key_input_buffer_head];
             key_input_buffer_head = ((key_input_buffer_head + 1) % sizeof(key_input_buffer));
             key_input--;
-            U3RXIE = 1;         // Receiver interrupt enable
-            break;
+            U3RXIE = 1;         // Enable Rx interrupt
+            GIE = 1;            // Enable interrupt
+            return res;
         }
-        if (U3RXIF) {           // Wait for Rx interrupt flag set
-            res = U3RXB;        // Read data
-            break;
+        if (invoke_monitor) {
+            GIE = 1;            // Enable interrupt
+            return 0;           // This input is dummy to escape Z80 from  IO read instruction
+                                // and might be a garbage. Sorry.
         }
+        GIE = 1;                // Enable interrupt
+        __delay_us(1000);
     }
+
+    // not reached
     return res;
 }
 
 void ungetch(char c) {
+    GIE = 0;                    // Disable interrupt
+    if (key_input < sizeof(key_input_buffer)) {
+        key_input_buffer[(key_input_buffer_head + key_input) % sizeof(key_input_buffer)] = c;
+        key_input++;
+    }
     if ((sizeof(key_input_buffer) * 4 / 5) <= key_input) {
         // Disable key input interrupt if key buffer is full
         U3RXIE = 0;
-        return;
     }
-    key_input_buffer[(key_input_buffer_head + key_input) % sizeof(key_input_buffer)] = c;
-    key_input++;
+    GIE = 1;                    // Enable interrupt
 }
 
 uint8_t hw_ctrl_read(void)
@@ -180,15 +224,27 @@ int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *s
 
 // Called at UART3 receiving some data
 void __interrupt(irq(default),base(8)) Default_ISR(){
-    GIE = 0;                    // Disable interrupt
-
     // Read UART input if Rx interrupt flag is set
     if (U3RXIF) {
         uint8_t c = U3RXB;
         if (c != 0x00) {        // Save input key to the buffer if the input is not a break key
             ungetch(c);
-            goto enable_interupt_return;
+        } else {
+            invoke_monitor = 1;
         }
+    }
+
+    // Write UART output if some chars exists in the buffer and Tx interrupt flag is set
+    __con_flush_buffer();
+
+    // Disable Tx interrupt if the buffer is empty
+    if (con_output == 0)
+        U3TXIE = 0;
+}
+
+void try_to_invoke_monitor(void) {
+        if (!invoke_monitor)
+            return;
 
         // Break key was received.
         // Attempts to become a bassmaster.
@@ -201,35 +257,28 @@ void __interrupt(irq(default),base(8)) Default_ISR(){
             printf("/IORQ is active\n\r");
             #endif
             // Let I/O handler to handle the break key if /IORQ is detected if /IORQ is detected
-            invoke_monitor = 1;
-            goto enable_interupt_return;
+            return;
         }
 
         LATE0 = 0;              // set /BUSREQ to active
         __delay_us(20);         // Wait a while for Z80 to release the bus
         if (CLC3IF) {           // Check /IORQ again
             // Withdraw /BUSREQ and let I/O handler to handle the break key if /IORQ is detected
-            // if /IORQ is detected
             LATE0 = 1;
-            invoke_monitor = 1;
             #ifdef CPM_MON_DEBUG
             printf("Withdraw /BUSREQ because /IORQ is active\n\r");
             #endif
-            goto enable_interupt_return;
+            return;
         }
 
+        invoke_monitor = 0;
         bus_master(1);
         mon_setup();            // Hook NMI handler and assert /NMI
         bus_master(0);
         LATE0 = 1;              // Clear /BUSREQ so that the Z80 can handle NMI
-    }
-
- enable_interupt_return:
-    GIE = 1;                    // Enable interrupt
 }
 
-// Called at WAIT falling edge(Immediately after Z80 IORQ falling)
-void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
+void io_handle() {
     static uint8_t disk_drive = 0;
     static uint8_t disk_track = 0;
     static uint16_t disk_sector = 0;
@@ -240,7 +289,10 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     static uint8_t *disk_datap = NULL;
     uint8_t c;
 
-    GIE = 0;                    // Disable interrupt
+    try_to_invoke_monitor();
+
+    if (!CLC3IF)                // Nothing to do and just return if no IO access is occurring
+        return;
 
     int do_bus_master = 0;
     uint8_t io_addr = PORTB;
@@ -261,10 +313,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
         }
         break;
     case UART_DREG:
-        c = getch();
-        if (c == 0x00) {
-            invoke_monitor = 1;
-        }
+        con_flush_buffer();
+        c = getch_buffered();
         LATC = c;               // Out the character
         break;
     case DISK_REG_DATA:
@@ -314,8 +364,7 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     // Z80 IO write cycle
     switch (io_addr) {
     case UART_DREG:
-        while(!U3TXIF);
-        U3TXB = io_data;        // Write into    U3TXB
+        putch_buffered(io_data);
         io_output_chars++;
         break;
     case DISK_REG_DATA:
@@ -556,10 +605,8 @@ void __interrupt(irq(CLC3),base(8)) CLC_ISR() {
     bus_master(0);
 
  exit_wait:
+    CLC3IF = 0;             // Clear interrupt flag
     LATE0 = 1;              // /BUSREQ is deactive
     G3POL = 1;              // Release wait (D-FF reset)
     G3POL = 0;
-
-    CLC3IF = 0;             // Clear interrupt flag
-    GIE = 1;                // Enable interrupt
 }
