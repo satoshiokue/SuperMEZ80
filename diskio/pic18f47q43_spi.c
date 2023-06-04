@@ -114,7 +114,10 @@ void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bit_order, u
 
     if (clock_delay == 0) {
         SPI1CLK = 0;   // FOSC (System Clock)
-        SPI1BAUD = 4;  // 64 MHz / 2 * ( 4 + 1) = 6.4 MHz
+        //SPI1BAUD = 3;  // 64 MHz / 2 * ( 3 + 1) = 8.0 MHz
+        //SPI1BAUD = 4;  // 64 MHz / 2 * ( 4 + 1) = 6.4 MHz
+        SPI1BAUD = 5;  // 64 MHz / 2 * ( 5 + 1) = 5.3 MHz
+        //SPI1BAUD = 7;  // 64 MHz / 2 * ( 5 + 1) = 4.0 MHz
     } else {
         SPI1CLK = 2;   // MFINTOSC (500 kHz)
         SPI1BAUD = 2;  // 500 kHz / 2 * ( 2 + 1) = 83 kHz
