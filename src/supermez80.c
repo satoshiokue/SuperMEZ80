@@ -64,6 +64,7 @@ void bus_master(int enable);
 void sys_init(void);
 void ioexp_init(void);
 int disk_init(void);
+int disk_select(void);
 void start_z80(void);
 
 // main routine
@@ -83,11 +84,13 @@ void main(void)
     printf("\n\r");
 
     ioexp_init();
+    if (disk_init() < 0)
+        while (1);
     mem_init();
     mon_init();
 
 #if !defined(CPM_MMU_EXERCISE)
-    if (disk_init() < 0)
+    if (disk_select() < 0)
         while (1);
 #endif  // !CPM_MMU_EXERCISE
 
@@ -233,9 +236,6 @@ void ioexp_init(void)
 
 int disk_init(void)
 {
-    int i;
-    unsigned int drive;
-
     //
     // Initialize SD Card
     //
@@ -252,6 +252,14 @@ int disk_init(void)
         printf("Failed to mount SD Card.\n\r");
         return -2;
     }
+
+    return 0;
+}
+
+int disk_select(void)
+{
+    int i;
+    unsigned int drive;
 
     //
     // Select disk image folder
