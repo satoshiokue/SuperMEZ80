@@ -54,9 +54,11 @@ void mem_init()
         dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE);
         dma_read_from_sram(addr, tmp_buf[1], TMP_BUF_SIZE);
         if (memcmp(tmp_buf[0], tmp_buf[1], TMP_BUF_SIZE) != 0) {
+            #ifdef CPM_MMU_DEBUG
             printf("\nMemory error at %06lXH\n\r", addr);
             util_hexdump_sum(" write: ", tmp_buf[0], TMP_BUF_SIZE);
             util_hexdump_sum("verify: ", tmp_buf[1], TMP_BUF_SIZE);
+            #endif
             break;
         }
         if (addr == 0)
@@ -120,7 +122,7 @@ void set_bank_pins(uint32_t addr)
     #endif
     #ifdef GPIO_BANK1
     mask |= (1 << GPIO_BANK1);
-    if ((addr >> 17) & 1) {
+    if (!((addr >> 17) & 1)) {  // invert A17 to activate CE2 of TC551001
         val |= (1 << GPIO_BANK1);
     }
     #endif
