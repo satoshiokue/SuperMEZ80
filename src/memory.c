@@ -149,6 +149,10 @@ void dma_acquire_addrbus(uint32_t addr)
     #ifdef GPIO_LED
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
     #endif
+    #ifdef GPIO_A13
+    mcp23s08_write(MCP23S08_ctx, GPIO_A13, ((addr >> 13) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A13, MCP23S08_PINMODE_OUTPUT);
+    #endif
     mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
@@ -161,6 +165,9 @@ void dma_acquire_addrbus(uint32_t addr)
 void dma_release_addrbus(void)
 {
     int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
+    #ifdef GPIO_A13
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A13, MCP23S08_PINMODE_INPUT);
+    #endif
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
