@@ -102,6 +102,11 @@ void main(void)
     //
     // Start Z80
     //
+    if (NCO1EN) {
+        printf("Use NCO %.2f MHz for Z80 clock\n\r", ((uint32_t)NCO1INC * 61 / 2) / 1000000.0);
+    } else {
+        printf("Use RA3 external clock for Z80\n\r");
+    }
     printf("\n\r");
     start_z80();
 
@@ -175,9 +180,10 @@ void sys_init()
     LATC = 0x00;
     TRISC = 0x00;       // Set as output
 
-    // Z80 clock(RA3) by NCO FDC mode
-    RA3PPS = 0x3f;      // RA3 asign NCO1
+    // Z80 clock(RA3)
     ANSELA3 = 0;        // Disable analog function
+#ifdef Z80_CLK
+    RA3PPS = 0x3f;      // RA3 asign NCO1
     TRISA3 = 0;         // NCO output pin
     NCO1INC = Z80_CLK * 2 / 61;
     // NCO1INC = 524288;   // 15.99MHz
@@ -185,6 +191,13 @@ void sys_init()
     NCO1PFM = 0;        // FDC mode
     NCO1OUT = 1;        // NCO output enable
     NCO1EN = 1;         // NCO enable
+#else
+    // Disable clock output for Z80 (Use external clock for Z80)
+    RA3PPS = 0;         // select LATxy
+    TRISA3 = 1;         // set as input
+    NCO1OUT = 0;        // NCO output disable
+    NCO1EN = 0;         // NCO disable
+#endif
 
     // /WE (RA2) output pin
     ANSELA2 = 0;        // Disable analog function

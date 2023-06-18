@@ -23,7 +23,15 @@
 //#define CPM_MMU_EXERCISE
 //#define CPM_MON_DEBUG
 
-#define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
+// Z80 clock frequency (select one or use external clock)
+//#define Z80_CLK 3997696UL       //  4.0 MHz (NCOxINC = 0x20000, 64MHz/8/2)
+//#define Z80_CLK 4568778UL       //  4.6 MHz (NCOxINC = 0x24924, 64MHz/7/2)
+//#define Z80_CLK 5330241UL       //  5.3 MHz (NCOxINC = 0x2AAAA, 64MHz/6/2)
+#define Z80_CLK 6396277UL       //  6.4 MHz (NCOxINC = 0x33333, 64MHz/5/2)
+//#define Z80_CLK 7995392UL       //  8.0 MHz (NCOxINC = 0x40000, 64MHz/4/2)
+//#define Z80_CLK 10660482UL      // 10.7 MHz (NCOxINC = 0x55555, 64MHz/3/2)
+//#define Z80_CLK 12792615UL       //  12.8 MHz (NCOxINC = 0x66666, 64MHz/5)
+//#define Z80_CLK 15990784UL      // 16.0 MHz (NCOxINC = 0x80000, 64MHz/2/2)
 
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
