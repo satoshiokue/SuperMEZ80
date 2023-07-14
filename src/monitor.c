@@ -185,7 +185,8 @@ static struct {
     uint8_t sdcard_read;
     uint8_t sdcard_write;
     uint8_t sdcard_verbose;
-} dbg_set;
+    uint32_t z80_clock_NCO1INC;
+} dbg_set = { 0 };
 
 static void read_debug_settings(void)
 {
@@ -206,6 +207,8 @@ static void read_debug_settings(void)
     dbg_set.sdcard_read = (v & SDCARD_DEBUG_READ) ? 1 : 0;
     dbg_set.sdcard_write = (v & SDCARD_DEBUG_WRITE) ? 1 : 0;
     dbg_set.sdcard_verbose = (v & SDCARD_DEBUG_VERBOSE) ? 1 : 0;
+
+    dbg_set.z80_clock_NCO1INC = NCO1INC;
 }
 
 static void write_debug_settings(void)
@@ -227,6 +230,10 @@ static void write_debug_settings(void)
     v |= (dbg_set.sdcard_write ? SDCARD_DEBUG_WRITE : 0);
     v |= (dbg_set.sdcard_verbose ? SDCARD_DEBUG_VERBOSE : 0);
     SDCard_debug(v);
+
+    // XXX Fix me. Why this required twice? But it is necessary.
+    NCO1INC = (uint32_t)dbg_set.z80_clock_NCO1INC;
+    NCO1INC = (uint32_t)dbg_set.z80_clock_NCO1INC;
 }
 
 void mon_init(void)
@@ -845,6 +852,7 @@ int mon_cmd_set(int argc, char *args[])
         { "debug_sdcard_read",     &dbg_set.sdcard_read,     VA_I8  },
         { "debug_sdcard_write",    &dbg_set.sdcard_write,    VA_I8  },
         { "debug_sdcard_verbose",  &dbg_set.sdcard_verbose,  VA_I8  },
+        { "z80_clock_NCO1INC",     &dbg_set.z80_clock_NCO1INC,VA_I32 },
     };
 
     read_debug_settings();
