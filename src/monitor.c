@@ -445,7 +445,7 @@ int mon_get_str(char **linep)
 
     while (1) {
         char c = **linep;
-        if (c == ' ' || c == ',' || c == '\0')
+        if (c == ' ' || c == ',' || c == '=' || c == '\0')
             break;
         result++;
         (*linep)++;
@@ -459,6 +459,8 @@ int mon_get_hexval(char **linep)
 {
     int result = 0;
 
+    if ((*linep)[0] == '0' && (*linep)[1] == 'x')
+        (*linep) += 2;
     while (1) {
         char c = **linep;
         if ('a' <= c && c <= 'f')
@@ -468,9 +470,22 @@ int mon_get_hexval(char **linep)
         result++;
         (*linep)++;
     }
+    if (**linep == 'h' || **linep == 'H')
+        (*linep)++;
     mon_remove_space(linep);
 
     return result;
+}
+
+uint32_t mon_strtoval(char *str)
+{
+    if (str[0] == '\0')
+        return 0;
+    if (str[0] == '0' && str[1] == 'x')
+        return strtoul(&str[2], NULL, 16);;
+    if (str[strlen(str) - 1] == 'h' || str[strlen(str) - 1] == 'H')
+        return strtoul(str, NULL, 16);;
+    return strtoul(str, NULL, 10);;
 }
 
 int mon_parse(char *line, unsigned int *command, char *args[MON_MAX_ARGS])
@@ -543,7 +558,7 @@ int mon_parse(char *line, unsigned int *command, char *args[MON_MAX_ARGS])
             args[i] = NULL;
             break;
         }
-        if (*line == ',') {
+        if (*line == ',' || *line == '=') {
             // terminate arg[i] and go next argument
             (*line++) = '\0';
             continue;
@@ -575,9 +590,9 @@ int mon_cmd_dump(int argc, char *args[])
     unsigned int len = 64;
 
     if (args[0] != NULL && *args[0] != '\0')
-        addr = strtoul(args[0], NULL, 16);
+        addr = mon_strtoval(args[0]);
     if (args[1] != NULL && *args[1] != '\0')
-        len = (unsigned int)strtoul(args[1], NULL, 16);
+        len = (unsigned int)mon_strtoval(args[1]);
 
     if (addr & 0xf) {
         len += (addr & 0xf);
@@ -604,9 +619,9 @@ int mon_cmd_disassemble(int argc, char *args[])
     unsigned int len = 32;
 
     if (args[0] != NULL && *args[0] != '\0')
-        addr = strtoul(args[0], NULL, 16);
+        addr = mon_strtoval(args[0]);
     if (args[1] != NULL && *args[1] != '\0')
-        len = (unsigned int)strtoul(args[1], NULL, 16);
+        len = (unsigned int)mon_strtoval(args[1]);
 
     unsigned int leftovers = 0;
     while (leftovers < len) {
@@ -646,13 +661,13 @@ int mon_cmd_diskread(int argc, char *args[])
     } else
     if (argc == 1 && *args[0] != '\0') {
         // use the first argument as lba if only one argument specified
-        lba = strtoul(args[0], NULL, 10);
+        lba = mon_strtoval(args[0]);
     } else {
         if (*args[0] != '\0')
-            drive = (unsigned int)strtoul(args[0], NULL, 10);
+            drive = (unsigned int)mon_strtoval(args[0]);
         if (*args[1] != '\0') {
             update_lba = 1;
-            track = (unsigned int)strtoul(args[1], NULL, 10);
+            track = (unsigned int)mon_strtoval(args[1]);
         }
         if (argc == 2) {
             update_lba = 0;
@@ -662,10 +677,10 @@ int mon_cmd_diskread(int argc, char *args[])
         }
         if (2 < argc && *args[2] != '\0') {
             update_lba = 1;
-            sector = (unsigned int)strtoul(args[2], NULL, 10);
+            sector = (unsigned int)mon_strtoval(args[2]);
         }
         if (3 < argc && *args[3] != '\0')
-            len = (unsigned int)strtoul(args[3], NULL, 10);
+            len = (unsigned int)mon_strtoval(args[3]);
     }
     mon_cur_drive = drive;
 
@@ -697,10 +712,10 @@ int mon_cmd_sdread(int argc, char *args[])
     unsigned int count = 1;
 
     if (0 < argc && *args[0] != '\0') {
-        lba = strtoul(args[0], NULL, 10);
+        lba = mon_strtoval(args[0]);
     }
     if (1 < argc && *args[1] != '\0') {
-        count = (unsigned int)strtoul(args[1], NULL, 10);
+        count = (unsigned int)mon_strtoval(args[1]);
     }
 
     for (i = 0; i < count; i++) {
@@ -719,7 +734,7 @@ int mon_cmd_sdread(int argc, char *args[])
 int mon_cmd_step(int argc, char *args[])
 {
     if (args[0] != NULL && *args[0] != '\0') {
-        mon_step_execution = (unsigned int)strtoul(args[0], NULL, 16);
+        mon_step_execution = (unsigned int)mon_strtoval(args[0]);
     } else {
         mon_step_execution = 1;
     }
@@ -751,7 +766,6 @@ int mon_cmd_status(int argc, char *args[])
 int mon_cmd_breakpoint(int argc, char *args[])
 {
     uint8_t rst08[] = { 0xcf };
-    char *p;
 
     if (args[0] != NULL && *args[0] != '\0') {
         // break point address specified
@@ -761,7 +775,7 @@ int mon_cmd_breakpoint(int argc, char *args[])
             mon_bp_installed = 0;
         }
 
-        mon_bp_addr = strtoul(args[0], &p, 16);  // new break point address
+        mon_bp_addr = mon_strtoval(args[0]);  // new break point address
         printf("Set breakpoint at %04lX\n\r", mon_bp_addr);
 
         // save and replace the instruction at the break point with RST instruction
@@ -807,6 +821,7 @@ int mon_cmd_reset(int argc, char *args[])
 int mon_cmd_set(int argc, char *args[])
 {
     unsigned int i;
+    void *ptr;
     #define VA_I8 0
     #define VA_I16 (1 << 0)
     static const struct {
@@ -836,10 +851,11 @@ int mon_cmd_set(int argc, char *args[])
     // show all settings if no arguments specified
     if (args[0] == NULL || *args[0] == '\0') {
         for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
+            ptr = variables[i].ptr;
             if (variables[i].attr & VA_I16)
-                printf("%s=%d\n\r", variables[i].name, *(uint16_t*)variables[i].ptr);
+                printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint16_t*)ptr, *(uint16_t*)ptr);
             else
-                printf("%s=%d\n\r", variables[i].name, *(uint8_t*)variables[i].ptr);
+                printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint8_t*)ptr, *(uint8_t*)ptr);
         }
         return MON_CMD_OK;
     }
@@ -859,17 +875,18 @@ int mon_cmd_set(int argc, char *args[])
     // set value to the variable if second argument is specified
     if (args[1] != NULL && *args[1] != '\0') {
         if (variables[i].attr & VA_I16)
-            *(uint16_t*)variables[i].ptr = (uint8_t)strtoul(args[1], NULL, 16);
+            *(uint16_t*)variables[i].ptr = (uint16_t)mon_strtoval(args[1]);
         else
-            *(uint8_t*)variables[i].ptr = (uint8_t)strtoul(args[1], NULL, 16);
+            *(uint8_t*)variables[i].ptr = (uint8_t)mon_strtoval(args[1]);
         write_debug_settings();
     }
 
     // show name and value of the variable
+    ptr = variables[i].ptr;
     if (variables[i].attr & VA_I16)
-        printf("%s=%d\n\r", variables[i].name, *(uint16_t*)variables[i].ptr);
+        printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint16_t*)ptr, *(uint16_t*)ptr);
     else
-        printf("%s=%d\n\r", variables[i].name, *(uint8_t*)variables[i].ptr);
+        printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint8_t*)ptr, *(uint8_t*)ptr);
 
     return MON_CMD_OK;
 }
