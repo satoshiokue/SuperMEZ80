@@ -824,6 +824,7 @@ int mon_cmd_set(int argc, char *args[])
     void *ptr;
     #define VA_I8 0
     #define VA_I16 (1 << 0)
+    #define VA_I32 (1 << 1)
     static const struct {
         const char *name;
         void *ptr;
@@ -852,6 +853,9 @@ int mon_cmd_set(int argc, char *args[])
     if (args[0] == NULL || *args[0] == '\0') {
         for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
             ptr = variables[i].ptr;
+            if (variables[i].attr & VA_I32)
+                printf("%s=%ld (%lXh)\n\r", variables[i].name, *(uint32_t*)ptr, *(uint32_t*)ptr);
+            else
             if (variables[i].attr & VA_I16)
                 printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint16_t*)ptr, *(uint16_t*)ptr);
             else
@@ -874,6 +878,9 @@ int mon_cmd_set(int argc, char *args[])
 
     // set value to the variable if second argument is specified
     if (args[1] != NULL && *args[1] != '\0') {
+        if (variables[i].attr & VA_I32)
+            *(uint32_t*)variables[i].ptr = (uint32_t)mon_strtoval(args[1]);
+        else
         if (variables[i].attr & VA_I16)
             *(uint16_t*)variables[i].ptr = (uint16_t)mon_strtoval(args[1]);
         else
@@ -883,6 +890,9 @@ int mon_cmd_set(int argc, char *args[])
 
     // show name and value of the variable
     ptr = variables[i].ptr;
+    if (variables[i].attr & VA_I32)
+        printf("%s=%ld (%lXh)\n\r", variables[i].name, *(uint32_t*)ptr, *(uint32_t*)ptr);
+    else
     if (variables[i].attr & VA_I16)
         printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint16_t*)ptr, *(uint16_t*)ptr);
     else
