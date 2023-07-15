@@ -102,6 +102,11 @@ void main(void)
     //
     // Start Z80
     //
+    if (NCO1EN) {
+        printf("Use NCO %.2f MHz for Z80 clock\n\r", ((uint32_t)NCO1INC * 61 / 2) / 1000000.0);
+    } else {
+        printf("Use RA3 external clock for Z80\n\r");
+    }
     printf("\n\r");
     start_z80();
 
@@ -124,14 +129,18 @@ void bus_master(int enable)
         LATA4 = 1;          // deactivate /OE
         LATA2 = 1;          // deactivate /WE
 
-        // Set address bus as output (except /RFSH)
-        TRISD = 0x40;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
+        // Set address bus as output
+        #ifdef Z80_USE_M1_FOR_SRAM_OE
+        TRISD = 0x60;       // A15-A8 pin except 6:/RFSH and 5:/M1
+        #else
+        TRISD = 0x40;       // A15-A8 pin except 6:/RFSH
+        #endif
         TRISB = 0x00;       // A7-A0
     } else {
         // Set address bus as input
         dma_release_addrbus();
 
-        TRISD = 0x7f;       // A15-A8 pin (A14:/RFSH, A15:/WAIT)
+        TRISD = 0x7f;       // A15-A8 pin except 7:/WAIT
         TRISB = 0xff;       // A7-A0 pin
         TRISC = 0xff;       // D7-D0 pin
 
@@ -158,7 +167,11 @@ void sys_init()
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
     ANSELD = 0x00;      // Disable analog function
     LATD = 0x00;
-    TRISD = 0x40;       // Set as output except /RFSH
+    #ifdef Z80_USE_M1_FOR_SRAM_OE
+    TRISD = 0x60;       // Set as output except 6:/RFSH and 5:/M1
+    #else
+    TRISD = 0x40;       // Set as output except 6:/RFSH
+    #endif
 
     // SPI /CS (RE2) output pin
     ANSELE2 = 0;        // Disable analog function
@@ -175,9 +188,10 @@ void sys_init()
     LATC = 0x00;
     TRISC = 0x00;       // Set as output
 
-    // Z80 clock(RA3) by NCO FDC mode
-    RA3PPS = 0x3f;      // RA3 asign NCO1
+    // Z80 clock(RA3)
     ANSELA3 = 0;        // Disable analog function
+#ifdef Z80_CLK
+    RA3PPS = 0x3f;      // RA3 asign NCO1
     TRISA3 = 0;         // NCO output pin
     NCO1INC = Z80_CLK * 2 / 61;
     // NCO1INC = 524288;   // 15.99MHz
@@ -185,6 +199,13 @@ void sys_init()
     NCO1PFM = 0;        // FDC mode
     NCO1OUT = 1;        // NCO output enable
     NCO1EN = 1;         // NCO enable
+#else
+    // Disable clock output for Z80 (Use external clock for Z80)
+    RA3PPS = 0;         // select LATxy
+    TRISA3 = 1;         // set as input
+    NCO1OUT = 0;        // NCO output disable
+    NCO1EN = 0;         // NCO disable
+#endif
 
     // /WE (RA2) output pin
     ANSELA2 = 0;        // Disable analog function
@@ -228,8 +249,10 @@ void ioexp_init(void)
     }
     mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS0, MCP23S08_PINMODE_OUTPUT);
+    #ifdef GPIO_CS1
     mcp23s08_write(MCP23S08_ctx, GPIO_CS1, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS1, MCP23S08_PINMODE_OUTPUT);
+    #endif
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
 }
@@ -361,6 +384,13 @@ void start_z80(void)
     WPUA5 = 1;          // Week pull up
     TRISA5 = 1;         // Set as input
 
+    #ifdef Z80_USE_M1_FOR_SRAM_OE
+    // /M1 (RD5) input pin
+    ANSELD5 = 0;        // Disable analog function
+    WPUD5 = 1;          // Week pull up
+    TRISD5 = 1;         // Set as input
+    #endif
+
     // /RFSH (RD6) input pin
     ANSELD6 = 0;        // Disable analog function
     WPUD6 = 1;          // Week pull up
@@ -378,6 +408,9 @@ void start_z80(void)
     CLCIN0PPS = 0x01;   // RA1 <- /MREQ
     CLCIN1PPS = 0x00;   // RA0 <- /IORQ
     CLCIN2PPS = 0x1e;   // RD6 <- /RFSH
+    #ifdef Z80_USE_M1_FOR_SRAM_OE
+    CLCIN3PPS = 0x1d;   // RD5 <- /M1
+    #endif
     CLCIN4PPS = 0x05;   // RA5 <- /RD
 
     // 1,2,5,6 = Port A, C
@@ -389,6 +422,20 @@ void start_z80(void)
     //========== CLC1 /OE ==========
     CLCSELECT = 0;       // CLC1 select
 
+    #ifdef Z80_USE_M1_FOR_SRAM_OE
+    CLCnSEL0 = 0;        // CLCIN0PPS <- /MREQ
+    CLCnSEL1 = 4;        // CLCIN4PPS <- /RD
+    CLCnSEL2 = 3;        // CLCIN3PPS <- /M1
+    CLCnSEL3 = 127;      // NC
+
+    CLCnGLS0 = 0x01;     // /MREQ inverted
+    CLCnGLS1 = 0x04;     // /RD inverted
+    CLCnGLS2 = 0x10;     // /M1 inverted
+    CLCnGLS3 = 0x40;     // 1(0 inverted) for AND gate
+
+    CLCnPOL = 0x80;      // inverted the CLC1 output
+    CLCnCON = 0x80;      // AND-OR
+    #else
     CLCnSEL0 = 0;        // CLCIN0PPS <- /MREQ
     CLCnSEL1 = 2;        // CLCIN2PPS <- /RFSH
     CLCnSEL2 = 4;        // CLCIN4PPS <- /RD
@@ -401,6 +448,7 @@ void start_z80(void)
 
     CLCnPOL = 0x80;      // inverted the CLC1 output
     CLCnCON = 0x82;      // 4 input AND
+    #endif
 
     //========== CLC2 /WE ==========
     CLCSELECT = 1;       // CLC2 select

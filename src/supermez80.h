@@ -23,7 +23,17 @@
 //#define CPM_MMU_EXERCISE
 //#define CPM_MON_DEBUG
 
-#define Z80_CLK 6000000UL       // Z80 clock frequency(Max 16MHz)
+// Z80 clock frequency (select one or use external clock)
+//#define Z80_CLK 3997696UL       //  4.0 MHz (NCOxINC = 0x20000, 64MHz/8/2)
+//#define Z80_CLK 4568778UL       //  4.6 MHz (NCOxINC = 0x24924, 64MHz/7/2)
+//#define Z80_CLK 5330241UL       //  5.3 MHz (NCOxINC = 0x2AAAA, 64MHz/6/2)
+#define Z80_CLK 6396277UL       //  6.4 MHz (NCOxINC = 0x33333, 64MHz/5/2)
+//#define Z80_CLK 7995392UL       //  8.0 MHz (NCOxINC = 0x40000, 64MHz/4/2)
+//#define Z80_CLK 10660482UL      // 10.7 MHz (NCOxINC = 0x55555, 64MHz/3/2)
+//#define Z80_CLK 12792615UL       //  12.8 MHz (NCOxINC = 0x66666, 64MHz/5)
+//#define Z80_CLK 15990784UL      // 16.0 MHz (NCOxINC = 0x80000, 64MHz/2/2)
+
+//#define Z80_USE_M1_FOR_SRAM_OE
 
 #define SPI_CLOCK_100KHZ 10     // Determined by actual measurement
 #define SPI_CLOCK_2MHZ   0      // Maximum speed w/o any wait (1~2 MHz)
@@ -31,19 +41,34 @@
 #define SECTOR_SIZE      128
 #define TMP_BUF_SIZE     256
 
-#define MEM_CHECK_UNIT   TMP_BUF_SIZE * 16 // 2 KB
-#define MAX_MEM_SIZE     0x00100000        // 1 MB
-#define HIGH_ADDR_MASK   0xffffc000
-#define LOW_ADDR_MASK    0x00003fff
-
 #define GPIO_CS0    0
+#if defined(Z80_USE_M1_FOR_SRAM_OE)
+#define GPIO_A13    1
+#else
 #define GPIO_CS1    1
+#endif
 #define GPIO_BANK1  2
 #define GPIO_BANK2  3
 #define GPIO_NMI    4
 #define GPIO_A14    5
 #define GPIO_A15    6
 #define GPIO_BANK0  7
+
+#define MEM_CHECK_UNIT   TMP_BUF_SIZE * 16 // 2 KB
+#define MAX_MEM_SIZE     0x00100000        // 1 MB
+#if defined(GPIO_A13)
+#define HIGH_ADDR_MASK   0xffffe000
+#define LOW_ADDR_MASK    0x00001fff
+#elif defined(GPIO_A14)
+#define HIGH_ADDR_MASK   0xffffc000
+#define LOW_ADDR_MASK    0x00003fff
+#elif defined(GPIO_A15)
+#define HIGH_ADDR_MASK   0xffff8000
+#define LOW_ADDR_MASK    0x00007fff
+#else
+#define HIGH_ADDR_MASK   0xffff0000
+#define LOW_ADDR_MASK    0x0000ffff
+#endif
 
 //
 // Constant value definitions

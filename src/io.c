@@ -357,7 +357,7 @@ void io_handle() {
     if (invoke_monitor) {
         goto enter_bus_master;
     } else {
-        goto exit_wait;
+        goto withdraw_busreq;
     }
 
  io_write:
@@ -435,19 +435,23 @@ void io_handle() {
         #endif
         break;
     }
-    if (!do_bus_master && !invoke_monitor) {
-        goto exit_wait;
-    }
 
     //
-    // Do something as the bus master
+    // Assert /BUSREQ and release /WAIT
     //
     LATE0 = 0;          // /BUSREQ is active
     G3POL = 1;          // Release wait (D-FF reset)
     G3POL = 0;
     while(!RA0);        // /IORQ
 
+    if (!do_bus_master && !invoke_monitor) {
+        goto withdraw_busreq;
+    }
+
  enter_bus_master:
+    //
+    // Do something as the bus master
+    //
     bus_master(1);
 
     if (!do_bus_master) {
@@ -604,9 +608,7 @@ void io_handle() {
 
     bus_master(0);
 
- exit_wait:
+ withdraw_busreq:
     CLC3IF = 0;             // Clear interrupt flag
     LATE0 = 1;              // /BUSREQ is deactive
-    G3POL = 1;              // Release wait (D-FF reset)
-    G3POL = 0;
 }

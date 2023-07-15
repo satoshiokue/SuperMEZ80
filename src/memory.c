@@ -54,9 +54,11 @@ void mem_init()
         dma_write_to_sram(addr, tmp_buf[0], TMP_BUF_SIZE);
         dma_read_from_sram(addr, tmp_buf[1], TMP_BUF_SIZE);
         if (memcmp(tmp_buf[0], tmp_buf[1], TMP_BUF_SIZE) != 0) {
+            #ifdef CPM_MMU_DEBUG
             printf("\nMemory error at %06lXH\n\r", addr);
             util_hexdump_sum(" write: ", tmp_buf[0], TMP_BUF_SIZE);
             util_hexdump_sum("verify: ", tmp_buf[1], TMP_BUF_SIZE);
+            #endif
             break;
         }
         if (addr == 0)
@@ -120,7 +122,7 @@ void set_bank_pins(uint32_t addr)
     #endif
     #ifdef GPIO_BANK1
     mask |= (1 << GPIO_BANK1);
-    if ((addr >> 17) & 1) {
+    if (!((addr >> 17) & 1)) {  // invert A17 to activate CE2 of TC551001
         val |= (1 << GPIO_BANK1);
     }
     #endif
@@ -147,6 +149,10 @@ void dma_acquire_addrbus(uint32_t addr)
     #ifdef GPIO_LED
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
     #endif
+    #ifdef GPIO_A13
+    mcp23s08_write(MCP23S08_ctx, GPIO_A13, ((addr >> 13) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A13, MCP23S08_PINMODE_OUTPUT);
+    #endif
     mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
     mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
@@ -159,6 +165,9 @@ void dma_acquire_addrbus(uint32_t addr)
 void dma_release_addrbus(void)
 {
     int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
+    #ifdef GPIO_A13
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A13, MCP23S08_PINMODE_INPUT);
+    #endif
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 

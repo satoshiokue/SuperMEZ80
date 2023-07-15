@@ -7,6 +7,7 @@ XC8_OPTS := --chip=$(PIC)
 #XC8_OPTS := -mcpu=$(PIC) -std=c99
 #PP3_DIR := $(PJ_DIR)/../a-p-prog/sw
 PP3_OPTS := -c $(PROGPORT) -s 1700 -v 2 -r 30 -t $(PIC)
+TEST_REPEAT := 10
 
 PJ_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 FATFS_DIR := $(PJ_DIR)/../FatFs
@@ -65,6 +66,11 @@ upload: $(BUILD_DIR)/supermez80.hex
 
 test::
 	PORT=$(CONSPORT) test/test.sh
+
+test_repeat::
+	for i in $$(seq $(TEST_REPEAT)); do \
+          PORT=$(CONSPORT) test/test.sh || exit 1; \
+        done
 
 clean::
 	rm -rf $(BUILD_DIR)
