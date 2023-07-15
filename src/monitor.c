@@ -874,7 +874,7 @@ int mon_cmd_set(int argc, char *args[])
 
     // search entry of variable
     for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
-        if (stricmp(variables[i].name, args[0]) == 0)
+        if (util_stricmp(variables[i].name, args[0]) == 0)
             break;
     }
 

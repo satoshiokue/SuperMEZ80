@@ -21,8 +21,9 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <xc.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <stdint.h>
 #include "utils.h"
 
 void util_hexdump(const char *header, const void *addr, unsigned int size)
@@ -76,4 +77,14 @@ void util_hexdump_sum(const char *header, const void *addr, unsigned int size)
     for (int i = 0; i < size; i++)
         sum += *p++;
     printf("%s%53s CHECKSUM: %02x\n\r", header, "", sum);
+}
+
+int util_stricmp(const char *a, const char *b)
+{
+  int ua, ub;
+  do {
+      ua = toupper((unsigned char)*a++);
+      ub = toupper((unsigned char)*b++);
+   } while (ua == ub && ua != '\0');
+   return ua - ub;
 }

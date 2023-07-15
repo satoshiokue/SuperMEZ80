@@ -31,5 +31,6 @@
 void util_hexdump(const char *header, const void *addr, unsigned int size);
 void util_hexdump_sum(const char *header, const void *addr, unsigned int size);
 void util_addrdump(const char *header, uint32_t addr_offs, const void *addr, unsigned int size);
+int util_stricmp(const char *a, const char *b);
 
 #endif  // __UTILS_H__
