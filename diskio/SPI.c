@@ -303,7 +303,7 @@ void SPI(end_transaction)(struct SPI *ctx_)
     TRISC = ctx->trisc;  // restore direction settings
 }
 
-void SPI(dummy_clocks)(struct SPI *ctx_, int clocks)
+void SPI(dummy_clocks)(struct SPI *ctx_, unsigned int clocks)
 {
     struct SPI_SW *ctx = (struct SPI_SW *)ctx_;
     if (ctx->clock_delay == 0) {

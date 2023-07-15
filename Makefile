@@ -2,7 +2,7 @@ PROGPORT := /dev/tty.usbmodem1444301
 CONSPORT := /dev/cu.usbserial-144440
 PIC := 18F47Q43
 XC8 := /Applications/microchip/xc8/v2.40/bin/xc8
-XC8_OPTS := --chip=$(PIC)
+XC8_OPTS := --chip=$(PIC) --std=c99
 #XC8 := /Applications/microchip/xc8/v2.40/bin/xc8-cc
 #XC8_OPTS := -mcpu=$(PIC) -std=c99
 #PP3_DIR := $(PJ_DIR)/../a-p-prog/sw

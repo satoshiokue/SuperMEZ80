@@ -232,8 +232,8 @@ static void write_debug_settings(void)
     SDCard_debug(v);
 
     // XXX Fix me. Why this required twice? But it is necessary.
-    NCO1INC = (uint32_t)dbg_set.z80_clock_NCO1INC;
-    NCO1INC = (uint32_t)dbg_set.z80_clock_NCO1INC;
+    NCO1INC = (__uint24)dbg_set.z80_clock_NCO1INC;
+    NCO1INC = (__uint24)dbg_set.z80_clock_NCO1INC;
 }
 
 void mon_init(void)

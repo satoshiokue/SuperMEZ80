@@ -172,7 +172,7 @@ static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
     return SDCARD_SUCCESS;
 }
 
-int SDCard_read512(uint32_t addr, int offs, void *buf, unsigned int count)
+int SDCard_read512(uint32_t addr, unsigned int offs, void *buf, unsigned int count)
 {
     struct SPI *spi = ctx->spi;
     int result;
@@ -211,7 +211,7 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, unsigned int count)
     SPI(receive)(spi, buf, count);
     if (ctx->calc_read_crc)
         crc = __SDCard_crc16(crc, buf, count);
-    for (int i = 0; i < 512 - offs - (int)count; i++) {
+    for (unsigned int i = 0; i < 512 - offs - count; i++) {
         response = SPI(receive_byte)(spi);
         crc = __SDCard_crc16(crc, &response, 1);
     }
@@ -239,7 +239,7 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, unsigned int count)
     return result;
 }
 
-int SDCard_write512(uint32_t addr, int offs, const void *buf, unsigned int count)
+int SDCard_write512(uint32_t addr, unsigned int offs, const void *buf, unsigned int count)
 {
     struct SPI *spi = ctx->spi;
     int result;
@@ -258,7 +258,7 @@ int SDCard_write512(uint32_t addr, int offs, const void *buf, unsigned int count
         crc = __SDCard_crc16(crc, &response, 1);
     }
     crc = __SDCard_crc16(crc, buf, count);
-    for (int i = 0; i < 512 - offs - (int)count; i++) {
+    for (unsigned int i = 0; i < 512 - offs - count; i++) {
         crc = __SDCard_crc16(crc, &response, 1);
     }
 
@@ -276,7 +276,7 @@ int SDCard_write512(uint32_t addr, int offs, const void *buf, unsigned int count
     SPI(send)(spi, &response, 1);
     SPI(dummy_clocks)(spi, offs);
     SPI(send)(spi, buf, count);
-    SPI(dummy_clocks)(spi, 512 - offs - (int)count);
+    SPI(dummy_clocks)(spi, 512 - offs - count);
     response = (crc >> 8) & 0xff;
     SPI(send)(spi, &response, 1);
     response = crc & 0xff;
