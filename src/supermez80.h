@@ -153,7 +153,7 @@ extern int turn_on_io_led;
 void bus_master(int enable);
 
 // io
-extern char getch(void);
+extern int getch(void);
 extern char getch_buffered(void);
 extern void ungetch(char c);
 extern void con_flush_buffer(void);

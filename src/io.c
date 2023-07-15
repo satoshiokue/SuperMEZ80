@@ -70,7 +70,7 @@ void putch(char c) {
 }
 
 // UART3 Recive
-char getch(void) {
+int getch(void) {
     while(!U3RXIF);             // Wait for Rx interrupt flag set
     return U3RXB;               // Read data
 }

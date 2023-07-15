@@ -232,8 +232,8 @@ static void write_debug_settings(void)
     SDCard_debug(v);
 
     // XXX Fix me. Why this required twice? But it is necessary.
-    NCO1INC = (uint32_t)dbg_set.z80_clock_NCO1INC;
-    NCO1INC = (uint32_t)dbg_set.z80_clock_NCO1INC;
+    NCO1INC = (__uint24)dbg_set.z80_clock_NCO1INC;
+    NCO1INC = (__uint24)dbg_set.z80_clock_NCO1INC;
 }
 
 void mon_init(void)
@@ -874,7 +874,7 @@ int mon_cmd_set(int argc, char *args[])
 
     // search entry of variable
     for (i = 0; i < UTIL_ARRAYSIZEOF(variables); i++) {
-        if (stricmp(variables[i].name, args[0]) == 0)
+        if (util_stricmp(variables[i].name, args[0]) == 0)
             break;
     }
 

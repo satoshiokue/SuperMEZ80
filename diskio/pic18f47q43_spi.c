@@ -195,7 +195,7 @@ void SPI(receive)(struct SPI *ctx_, void *buf, unsigned int count)
     *p++ = SPI1RXB;
 }
 
-void SPI(dummy_clocks)(struct SPI *ctx_, int clocks)
+void SPI(dummy_clocks)(struct SPI *ctx_, unsigned int clocks)
 {
     uint8_t dummy = 0xff;
     acquire_bus(ctx_);

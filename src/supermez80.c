@@ -305,7 +305,7 @@ int disk_select(void)
     if (1 < i) {
         printf("Select: ");
         while (1) {
-            char c = getch();       // Wait for input char
+            uint8_t c = (uint8_t)getch();       // Wait for input char
             if ('0' <= c && c <= '9' && c - '0' < i) {
                 selection = c - '0';
                 break;
