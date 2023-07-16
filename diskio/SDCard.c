@@ -21,13 +21,10 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <xc.h>
 #include <stdio.h>
 #include "SPI.h"
 #include "SDCard.h"
 #include "utils.h"
-
-#define SPI_PREFIX SPI2
 
 #define DEBUG
 #if defined(DEBUG)

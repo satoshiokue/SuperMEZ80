@@ -36,8 +36,10 @@ struct SPI_HW {
     uint8_t trisc;
     uint16_t clock_delay;
 };
-static struct SPI_HW ctx_ = { 0 };
-struct SPI *SPI(ctx) = (struct SPI *)&ctx_;
+static struct SPI_HW pic18f47q43_spi_ctx = { 0 };
+struct SPI *SPI(ctx) = (struct SPI *)&pic18f47q43_spi_ctx;
+
+void SPI(select)(struct SPI *ctx_, int select);
 
 static void acquire_bus(struct SPI *ctx_)
 {

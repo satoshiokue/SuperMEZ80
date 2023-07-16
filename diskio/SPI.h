@@ -24,17 +24,6 @@
 #ifndef __SPI_H__
 #define __SPI_H__
 
-#define SPI0_PICO      LATC0  // controller data out
-#define SPI0_PICO_TRIS TRISC0
-#define SPI0_CLK       LATC1  // clock
-#define SPI0_CLK_TRIS  TRISC1
-#define SPI0_POCI      ((uint8_t)((PORTC & 0x04) ? 1 : 0))  // controller data in
-#define SPI0_POCI_TRIS TRISC2
-#define SPI0_CS        LATE2  // chip select
-#define SPI0_CS_TRIS   TRISE2
-#define SPI0_CS_ANSEL  ANSELE2
-#define SPI0_CS_PORT   0
-
 #define SPI1_PICO      LATC3  // controller data out
 #define SPI1_PICO_TRIS TRISC3
 #define SPI1_CLK       LATC4  // clock
@@ -44,18 +33,6 @@
 #define SPI1_CS        LATE2  // chip select
 #define SPI1_CS_TRIS   TRISE2
 #define SPI1_CS_ANSEL  ANSELE2
-
-#define SPI2_PICO_PPS  RC0PPS
-#define SPI2_PICO_TRIS TRISC0
-#define SPI2_CLK_PIN   ((2 << 3) | 1)  // RC1
-#define SPI2_CLK_PPS   RC1PPS
-#define SPI2_CLK_TRIS  TRISC1
-#define SPI2_POCI_PIN  ((2 << 3) | 2)  // RC2
-#define SPI2_POCI_TRIS TRISC2
-#define SPI2_CS        LATE2  // chip select
-#define SPI2_CS_TRIS   TRISE2
-#define SPI2_CS_ANSEL  ANSELE2
-#define SPI2_CS_PORT   0
 
 #define SPI_MSBFIRST 1
 #define SPI_LSBFIRST 0
@@ -72,19 +49,6 @@ struct SPI {
     int dummy;
 };
 
-void SPI0_begin(struct SPI *ctx_);
-void SPI0_configure(struct SPI *ctx_, uint16_t clock_delay, uint8_t bitOrder, uint8_t dataMode);
-void SPI0_begin_transaction(struct SPI *ctx_);
-uint8_t SPI0_transfer_byte(struct SPI *ctx_, uint8_t output);
-void SPI0_transfer(struct SPI *ctx_, void *buf, unsigned int count);
-void SPI0_send(struct SPI *ctx_, const void *buf, unsigned int count);
-void SPI0_receive(struct SPI *ctx_, void *buf, unsigned int count);
-void SPI0_end_transaction(struct SPI *ctx_);
-void SPI0_dummy_clocks(struct SPI *ctx_, unsigned int clocks);
-uint8_t SPI0_receive_byte(struct SPI *ctx_);
-void SPI0_select(struct SPI *ctx_, int select);
-extern struct SPI *SPI0_ctx;
-
 void SPI1_begin(struct SPI *ctx_);
 void SPI1_configure(struct SPI *ctx_, uint16_t clock_delay, uint8_t bitOrder, uint8_t dataMode);
 void SPI1_begin_transaction(struct SPI *ctx_);
@@ -97,18 +61,5 @@ void SPI1_dummy_clocks(struct SPI *ctx_, unsigned int clocks);
 uint8_t SPI1_receive_byte(struct SPI *ctx_);
 void SPI1_select(struct SPI *ctx_, int select);
 extern struct SPI *SPI1_ctx;
-
-void SPI2_begin(struct SPI *ctx_);
-void SPI2_configure(struct SPI *ctx_, uint16_t clock_delay, uint8_t bitOrder, uint8_t dataMode);
-void SPI2_begin_transaction(struct SPI *ctx_);
-uint8_t SPI2_transfer_byte(struct SPI *ctx_, uint8_t output);
-void SPI2_transfer(struct SPI *ctx_, void *buf, unsigned int count);
-void SPI2_send(struct SPI *ctx_, const void *buf, unsigned int count);
-void SPI2_receive(struct SPI *ctx_, void *buf, unsigned int count);
-void SPI2_end_transaction(struct SPI *ctx_);
-void SPI2_dummy_clocks(struct SPI *ctx_, unsigned int clocks);
-uint8_t SPI2_receive_byte(struct SPI *ctx_);
-void SPI2_select(struct SPI *ctx_, int select);
-extern struct SPI *SPI2_ctx;
 
 #endif  // __SPI_H__

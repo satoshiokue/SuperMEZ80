@@ -50,6 +50,18 @@
 #define SPI_SS      E2
 // RE3 is occupied by PIC MCLR
 
+#define SPI_SDCARD_PICO_PPS  RC0PPS
+#define SPI_SDCARD_PICO_TRIS TRISC0
+#define SPI_SDCARD_CLK_PIN   ((2 << 3) | 1)  // RC1
+#define SPI_SDCARD_CLK_PPS   RC1PPS
+#define SPI_SDCARD_CLK_TRIS  TRISC1
+#define SPI_SDCARD_POCI_PIN  ((2 << 3) | 2)  // RC2
+#define SPI_SDCARD_POCI_TRIS TRISC2
+#define SPI_SDCARD_CS        LATE2  // chip select
+#define SPI_SDCARD_CS_TRIS   TRISE2
+#define SPI_SDCARD_CS_ANSEL  ANSELE2
+#define SPI_SDCARD_CS_PORT   0
+
 #include "emuz80_common.c"
 
 static void supermez80_spi_sys_init()
@@ -255,3 +267,8 @@ void supermez80_spi_init()
     board_set_nmi_pin_hook   = supermez80_spi_set_nmi_pin;
     board_set_wait_pin_hook  = supermez80_spi_set_wait_pin;
 }
+
+#define SPI_PREFIX SPI_SDCARD
+#define SPI_USE_MCP23S08
+#include <pic18f47q43_spi.c>
+#include <SDCard.c>
