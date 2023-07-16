@@ -34,5 +34,46 @@
 #define PPS(port) PORT_CAT3(R, port, PPS)
 #define WPU(port) PORT_CAT(WPU, port)
 #define PORT(port) PORT_CAT(PORT, port)
+#define PPS_IN(port) PORT_CAT(PPS_IN, port)
+
+#define PPS_INA 0
+#define PPS_INA0 ((PPS_INA << 3) | 0)
+#define PPS_INA1 ((PPS_INA << 3) | 1)
+#define PPS_INA2 ((PPS_INA << 3) | 2)
+#define PPS_INA3 ((PPS_INA << 3) | 3)
+#define PPS_INA4 ((PPS_INA << 3) | 4)
+#define PPS_INA5 ((PPS_INA << 3) | 5)
+#define PPS_INA6 ((PPS_INA << 3) | 6)
+#define PPS_INA7 ((PPS_INA << 3) | 7)
+
+#define PPS_INB 1
+#define PPS_INB0 ((PPS_INB << 3) | 0)
+#define PPS_INB1 ((PPS_INB << 3) | 1)
+#define PPS_INB2 ((PPS_INB << 3) | 2)
+#define PPS_INB3 ((PPS_INB << 3) | 3)
+#define PPS_INB4 ((PPS_INB << 3) | 4)
+#define PPS_INB5 ((PPS_INB << 3) | 5)
+#define PPS_INB6 ((PPS_INB << 3) | 6)
+#define PPS_INB7 ((PPS_INB << 3) | 7)
+
+#define PPS_INC 2
+#define PPS_INC0 ((PPS_INC << 3) | 0)
+#define PPS_INC1 ((PPS_INC << 3) | 1)
+#define PPS_INC2 ((PPS_INC << 3) | 2)
+#define PPS_INC3 ((PPS_INC << 3) | 3)
+#define PPS_INC4 ((PPS_INC << 3) | 4)
+#define PPS_INC5 ((PPS_INC << 3) | 5)
+#define PPS_INC6 ((PPS_INC << 3) | 6)
+#define PPS_INC7 ((PPS_INC << 3) | 7)
+
+#define PPS_IND 3
+#define PPS_IND0 ((PPS_IND << 3) | 0)
+#define PPS_IND1 ((PPS_IND << 3) | 1)
+#define PPS_IND2 ((PPS_IND << 3) | 2)
+#define PPS_IND3 ((PPS_IND << 3) | 3)
+#define PPS_IND4 ((PPS_IND << 3) | 4)
+#define PPS_IND5 ((PPS_IND << 3) | 5)
+#define PPS_IND6 ((PPS_IND << 3) | 6)
+#define PPS_IND7 ((PPS_IND << 3) | 7)
 
 #endif  // __PICREGISTER_H__

@@ -32,69 +32,63 @@
 #include <mcp23s08.h>
 #include <picregister.h>
 
-#define Z80_DATA	C
-#define Z80_ADDR_H	D
-#define Z80_ADDR_L	B
+#define Z80_DATA        C
+#define Z80_ADDR_H      D
+#define Z80_ADDR_L      B
 
-#define Z80_IOREQ   A0
-#define Z80_MEMRQ   A1
-#define SRAM_WE     A2
-#define Z80_CLK     A3
-#define SRAM_OE     A4
-#define Z80_RD      A5
+#define Z80_IOREQ       A0
+#define Z80_MEMRQ       A1
+#define SRAM_WE         A2
+#define Z80_CLK         A3
+#define SRAM_OE         A4
+#define Z80_RD          A5
 // RA6 is used as UART TXD
 // RA7 is used as UART RXD
 
 // RD0~5 are used as address high A8~13
 #ifdef Z80_USE_M1_FOR_SRAM_OE
-#define Z80_M1      D5
+#define Z80_M1          D5
 #endif
-#define Z80_RFSH    D6
-#define Z80_WAIT    D7
+#define Z80_RFSH        D6
+#define Z80_WAIT        D7
 
-#define Z80_BUSRQ   E0
-#define Z80_RESET   E1
-#define SPI_SS      E2
+#define Z80_BUSRQ       E0
+#define Z80_RESET       E1
+#define SPI_SS          E2
 // RE3 is occupied by PIC MCLR
 
-#define GPIO_CS0    0
+#define GPIO_CS0        0
 #if defined(Z80_USE_M1_FOR_SRAM_OE)
-#define GPIO_A13    1
+#define GPIO_A13        1
 #else
-#define GPIO_CS1    1
+#define GPIO_CS1        1
 #endif
-#define GPIO_BANK1  2
-#define GPIO_BANK2  3
-#define GPIO_NMI    4
-#define GPIO_A14    5
-#define GPIO_A15    6
-#define GPIO_BANK0  7
+#define GPIO_BANK1      2
+#define GPIO_BANK2      3
+#define GPIO_NMI        4
+#define GPIO_A14        5
+#define GPIO_A15        6
+#define GPIO_BANK0      7
+
+#define SPI_SD_PICO     C0
+#define SPI_SD_CLK      C1
+#define SPI_SD_POCI     C2
+#define SPI_SD_SS       SPI_SS
+#define SPI_SD_GPIO_SS  GPIO_CS0
 
 #if defined(GPIO_A13)
-#define HIGH_ADDR_MASK   0xffffe000
-#define LOW_ADDR_MASK    0x00001fff
+#define HIGH_ADDR_MASK  0xffffe000
+#define LOW_ADDR_MASK   0x00001fff
 #elif defined(GPIO_A14)
-#define HIGH_ADDR_MASK   0xffffc000
-#define LOW_ADDR_MASK    0x00003fff
+#define HIGH_ADDR_MASK  0xffffc000
+#define LOW_ADDR_MASK   0x00003fff
 #elif defined(GPIO_A15)
-#define HIGH_ADDR_MASK   0xffff8000
-#define LOW_ADDR_MASK    0x00007fff
+#define HIGH_ADDR_MASK  0xffff8000
+#define LOW_ADDR_MASK   0x00007fff
 #else
-#define HIGH_ADDR_MASK   0xffff0000
-#define LOW_ADDR_MASK    0x0000ffff
+#define HIGH_ADDR_MASK  0xffff0000
+#define LOW_ADDR_MASK   0x0000ffff
 #endif
-
-#define SPI_SDCARD_PICO_PPS  RC0PPS
-#define SPI_SDCARD_PICO_TRIS TRISC0
-#define SPI_SDCARD_CLK_PIN   ((2 << 3) | 1)  // RC1
-#define SPI_SDCARD_CLK_PPS   RC1PPS
-#define SPI_SDCARD_CLK_TRIS  TRISC1
-#define SPI_SDCARD_POCI_PIN  ((2 << 3) | 2)  // RC2
-#define SPI_SDCARD_POCI_TRIS TRISC2
-#define SPI_SDCARD_CS        LATE2  // chip select
-#define SPI_SDCARD_CS_TRIS   TRISE2
-#define SPI_SDCARD_CS_ANSEL  ANSELE2
-#define SPI_SDCARD_CS_PORT   0
 
 #include "emuz80_common.c"
 
@@ -425,7 +419,7 @@ void supermez80_spi_init()
     board_set_wait_pin_hook  = supermez80_spi_set_wait_pin;
 }
 
-#define SPI_PREFIX SPI_SDCARD
+#define SPI_PREFIX SPI_SD
 #define SPI_USE_MCP23S08
 #include <pic18f47q43_spi.c>
 #include <SDCard.c>

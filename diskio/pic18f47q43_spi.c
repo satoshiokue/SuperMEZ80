@@ -21,7 +21,6 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <xc.h>
 #include <stdio.h>
 #include "SPI.h"
 #ifdef SPI_USE_MCP23S08
@@ -33,7 +32,7 @@
 struct SPI_HW {
     struct SPI spi;
     uint8_t bus_acquired;
-    uint8_t trisc;
+    uint8_t tris;
     uint16_t clock_delay;
 };
 static struct SPI_HW pic18f47q43_spi_ctx = { 0 };
@@ -45,12 +44,12 @@ static void acquire_bus(struct SPI *ctx_)
 {
     struct SPI_HW *ctx = (struct SPI_HW *)ctx_;
     if (ctx->bus_acquired == 0) {
-        SPI(CLK_PPS) = 0x31;    // Set as CLK output
-        SPI(PICO_PPS) = 0x32;   // Set as data output
-        ctx->trisc = TRISC;     // save direction settings
-        SPI(PICO_TRIS) = 0;     // set PICO as output
-        SPI(CLK_TRIS) = 0;      // set clock as output
-        SPI(POCI_TRIS) = 1;     // set POCI as input
+        PPS(SPI(CLK)) = 0x31;       // Set as CLK output
+        PPS(SPI(PICO)) = 0x32;      // Set as data output
+        ctx->tris = TRIS(Z80_DATA); // save direction settings
+        TRIS(SPI(PICO)) = 0;        // set PICO as output
+        TRIS(SPI(CLK)) = 0;         // set clock as output
+        TRIS(SPI(POCI)) = 1;        // set POCI as input
     }
     ctx->bus_acquired++;
 }
@@ -59,9 +58,9 @@ static void release_bus(struct SPI *ctx_)
 {
     struct SPI_HW *ctx = (struct SPI_HW *)ctx_;
     if (--ctx->bus_acquired <= 0) {
-        SPI(CLK_PPS) = 0x00;    // Release CLK output
-        SPI(PICO_PPS) = 0x00;   // Release data output
-        TRISC = ctx->trisc;     // restore direction settings
+        PPS(SPI(CLK)) = 0x00;       // Release CLK output
+        PPS(SPI(PICO)) = 0x00;      // Release data output
+        TRIS(Z80_DATA) = ctx->tris; // restore direction settings
     }
 }
 
@@ -73,18 +72,17 @@ void SPI(begin)(struct SPI *ctx_)
     SPI1CON0 = 0;
     SPI1CON1 = 0;
 
-    SPI1SCKPPS = SPI(CLK_PIN);  // Assign CLK input pin (?)
-    SPI1SDIPPS = SPI(POCI_PIN);  // Assign data input pin
+    SPI1SCKPPS = PPS_IN(SPI(CLK));  // Assign CLK input pin (?)
+    SPI1SDIPPS = PPS_IN(SPI(POCI)); // Assign data input pin
 #ifdef SPI_USE_MCP23S08
     if (mcp23s08_is_alive(MCP23S08_ctx)) {
-        mcp23s08_write(MCP23S08_ctx, SPI(CS_PORT), 1);  // Inactive
+        mcp23s08_write(MCP23S08_ctx, SPI(GPIO_SS), 1);  // Inactive
     } else
 #endif
     {
-    SPI(CS_ANSEL) = 0;  // Disable analog function
-    SPI(CS_TRIS) = 0;  // Set as output
+    TRIS(SPI(SS)) = 0;      // Set as output
     }
-    SPI1CON0bits.EN = 1;  // Enable SPI
+    SPI1CON0bits.EN = 1;    // Enable SPI
 }
 
 void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bit_order, uint8_t data_mode)
@@ -218,8 +216,8 @@ void SPI(select)(struct SPI *ctx_, int select)
 {
 #ifdef SPI_USE_MCP23S08
     if (mcp23s08_is_alive(MCP23S08_ctx)) {
-        mcp23s08_write(MCP23S08_ctx, SPI(CS_PORT), select ? 0 : 1);
+        mcp23s08_write(MCP23S08_ctx, SPI(GPIO_SS), select ? 0 : 1);
     } else
 #endif
-    SPI(CS) = select ? 0 : 1;
+    LAT(SPI(SS)) = select ? 0 : 1;
 }
