@@ -21,24 +21,20 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __MCP23S08_H__
-#define __MCP23S08_H__
+#define BOARD_DEPENDENT_SOURCE
 
-#include <SPI.h>
+#include <supermez80.h>
 
-struct MCP23S08;
-extern struct MCP23S08 *MCP23S08_ctx;
+#define SPI_IOEXP_PICO       LATC3  // controller data out
+#define SPI_IOEXP_PICO_TRIS  TRISC3
+#define SPI_IOEXP_CLK        LATC4  // clock
+#define SPI_IOEXP_CLK_TRIS   TRISC4
+#define SPI_IOEXP_POCI       ((uint8_t)((PORTC & 0x20) ? 1 : 0))  // controller data in
+#define SPI_IOEXP_POCI_TRIS  TRISC5
+#define SPI_IOEXP_CS         LATE2  // chip select
+#define SPI_IOEXP_CS_TRIS    TRISE2
+#define SPI_IOEXP_CS_ANSEL   ANSELE2
 
-#define MCP23S08_PINMODE_OUTPUT 0
-#define MCP23S08_PINMODE_INPUT  1
-
-void mcp23s08_init(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr);
-int mcp23s08_probe(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr);
-int mcp23s08_is_alive(struct MCP23S08 *ctx);
-int mcp23s08_set_pending(struct MCP23S08 *ctx, int pending);
-void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode);
-void mcp23s08_write(struct MCP23S08 *ctx, int gpio, int val);
-void mcp23s08_masked_write(struct MCP23S08 *ctx, uint32_t mask, uint32_t val);
-void mcp23s08_dump_regs(struct MCP23S08 *ctx, const char *header);
-
-#endif  // __MCP23S08_H__
+#define SPI_PREFIX SPI_IOEXP
+#include <SPI.c>
+#include <mcp23S08.c>

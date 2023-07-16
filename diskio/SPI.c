@@ -21,7 +21,6 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <xc.h>
 #include <stdio.h>
 #include "SPI.h"
 #ifdef SPI_USE_MCP23S08
@@ -341,6 +340,6 @@ void SPI(select)(struct SPI *ctx_, int select)
     SPI(CS) = select ? 0 : 1;
 }
 
-static struct SPI_SW ctx_ = { 0 };
+static struct SPI_SW SPI(ctx_) = { 0 };
 
-struct SPI *SPI(ctx) = (struct SPI *)&ctx_;
+struct SPI *SPI(ctx) = (struct SPI *)&SPI(ctx_);
