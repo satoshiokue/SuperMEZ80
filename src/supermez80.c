@@ -29,9 +29,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <SDCard.h>
-#include <SPI.h>
-#include <mcp23s08.h>
 #include <utils.h>
 
 static FATFS fs;
@@ -62,7 +59,6 @@ const unsigned char rom[] = {
 
 void bus_master(int enable);
 void sys_init(void);
-void ioexp_init(void);
 int disk_init(void);
 int disk_select(void);
 void start_z80(void);
@@ -71,19 +67,6 @@ void start_z80(void);
 void main(void)
 {
     sys_init();
-
-    //
-    // Give a chance to use PRC (RB6/A6) and PRD (RB7/A7) to PIC programer.
-    // It must prevent Z80 from driving A6 and A7 while this period.
-    //
-    printf("\n\r");
-    printf("wait for programmer ...\r");
-    __delay_ms(200);
-    printf("                       \r");
-
-    printf("\n\r");
-
-    ioexp_init();
     if (disk_init() < 0)
         while (1);
     mem_init();
@@ -132,38 +115,8 @@ void sys_init()
     board_sys_init();
 }
 
-void ioexp_init(void)
-{
-    //
-    // Initialize SPI I/O expander MCP23S08
-    //
-    if (mcp23s08_probe(MCP23S08_ctx, SPI_CLOCK_2MHZ, 0 /* address */) == 0) {
-        printf("SuperMEZ80+SPI with GPIO expander\n\r");
-    }
-    mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS0, MCP23S08_PINMODE_OUTPUT);
-    #ifdef GPIO_CS1
-    mcp23s08_write(MCP23S08_ctx, GPIO_CS1, 1);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS1, MCP23S08_PINMODE_OUTPUT);
-    #endif
-    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
-    mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
-}
-
 int disk_init(void)
 {
-    //
-    // Initialize SD Card
-    //
-    for (int retry = 0; 1; retry++) {
-        if (20 <= retry) {
-            printf("No SD Card?\n\r");
-            return -1;
-        }
-        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
-            break;
-        __delay_ms(200);
-    }
     if (f_mount(&fs, "0://", 1) != FR_OK) {
         printf("Failed to mount SD Card.\n\r");
         return -2;

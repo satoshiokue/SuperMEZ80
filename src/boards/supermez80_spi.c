@@ -27,6 +27,8 @@
 #define BOARD_DEPENDENT_SOURCE
 
 #include <supermez80.h>
+#include <stdio.h>
+#include <SDCard.h>
 #include <mcp23s08.h>
 
 #define Z80_IOREQ   A0
@@ -106,6 +108,36 @@ static void supermez80_spi_sys_init()
     LAT(SRAM_OE) = 1;
     TRIS(SRAM_OE) = 0;          // Set as output
     PPS(SRAM_OE) = 0x00;        // unbind with CLC
+
+    emuz80_common_wait_for_programmer();
+
+    //
+    // Initialize SPI I/O expander MCP23S08
+    //
+    if (mcp23s08_probe(MCP23S08_ctx, SPI_CLOCK_2MHZ, 0 /* address */) == 0) {
+        printf("SuperMEZ80+SPI with GPIO expander\n\r");
+    }
+    mcp23s08_write(MCP23S08_ctx, GPIO_CS0, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS0, MCP23S08_PINMODE_OUTPUT);
+    #ifdef GPIO_CS1
+    mcp23s08_write(MCP23S08_ctx, GPIO_CS1, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_CS1, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
+
+    //
+    // Initialize SD Card
+    //
+    for (int retry = 0; 1; retry++) {
+        if (20 <= retry) {
+            printf("No SD Card?\n\r");
+            while(0);
+        }
+        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
+            break;
+        __delay_ms(200);
+    }
 }
 
 static void supermez80_spi_bus_master(int enable)
