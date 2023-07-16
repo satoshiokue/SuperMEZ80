@@ -191,18 +191,18 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
     dma_acquire_addrbus(dest);
-    TRISC = 0x00;       // Set as output to write to the SRAM
+    SET_DATA_DIR_OUTPUT();  // Set as output to write to the SRAM
     ab.w = addr;
-    LATD = ab.h;
-    LATB = ab.l;
+    SET_ADDR_H_PINS(ab.h);
+    SET_ADDR_L_PINS(ab.l);
     for(i = 0; i < len - second_half; i++) {
         LATA2 = 0;      // activate /WE
-        LATC = ((uint8_t*)buf)[i];
+        SET_DATA_PINS(((uint8_t*)buf)[i]);
         LATA2 = 1;      // deactivate /WE
-        LATB = ++ab.l;
+        SET_ADDR_L_PINS(++ab.l);
         if (ab.l == 0) {
             ab.h++;
-            LATD = ab.h;
+            SET_ADDR_H_PINS(ab.h);
         }
     }
 
@@ -210,12 +210,12 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
         dma_acquire_addrbus(dest + i);
     for( ; i < len; i++) {
         LATA2 = 0;      // activate /WE
-        LATC = ((uint8_t*)buf)[i];
+        SET_DATA_PINS(((uint8_t*)buf)[i]);
         LATA2 = 1;      // deactivate /WE
-        LATB = ++ab.l;
+        SET_ADDR_L_PINS(++ab.l);
         if (ab.l == 0) {
             ab.h++;
-            LATD = ab.h;
+            SET_ADDR_H_PINS(ab.h);
         }
     }
 }
@@ -231,18 +231,18 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)LOW_ADDR_MASK + 1));
 
     dma_acquire_addrbus(src);
-    TRISC = 0xff;       // Set as input to read from the SRAM
+    SET_DATA_DIR_INPUT();  // Set as input to read from the SRAM
     ab.w = addr;
-    LATD = ab.h;
-    LATB = ab.l;
+    SET_ADDR_H_PINS(ab.h);
+    SET_ADDR_L_PINS(ab.l);
     for(i = 0; i < len - second_half; i++) {
         LATA4 = 0;      // activate /OE
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
-        LATB = ++ab.l;
+        SET_ADDR_L_PINS(++ab.l);
         if (ab.l == 0) {
             ab.h++;
-            LATD = ab.h;
+            SET_ADDR_H_PINS(ab.h);
         }
     }
 
@@ -252,10 +252,10 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
         LATA4 = 0;      // activate /OE
         ((uint8_t*)buf)[i] = PORTC;
         LATA4 = 1;      // deactivate /OE
-        LATB = ++ab.l;
+        SET_ADDR_L_PINS(++ab.l);
         if (ab.l == 0) {
             ab.h++;
-            LATD = ab.h;
+            SET_ADDR_H_PINS(ab.h);
         }
     }
 }

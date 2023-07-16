@@ -243,7 +243,7 @@ void mon_init(void)
 
 void mon_assert_nmi(void)
 {
-    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 0);
+    set_nmi_pin(0);
 }
 
 void mon_setup(void)
@@ -974,7 +974,7 @@ void mon_leave(void)
     dma_write_to_sram(phys_addr(pc), tmp_buf[0], size);
 
     // Clear NMI
-    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, 1);
+    set_nmi_pin(1);
 }
 
 void mon_cleanup(void)

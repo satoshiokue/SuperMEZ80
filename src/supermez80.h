@@ -198,6 +198,47 @@ extern void dma_read_from_sram(uint32_t src, void *buf, unsigned int len);
 extern void mmu_bank_config(int nbanks);
 extern void mmu_bank_select(int bank);
 
+// board
+extern void board_init(void);
+extern void (*board_sys_init_hook)(void);
+#define board_sys_init() (*board_sys_init_hook)()
+extern void (*board_bus_master_hook)(int enable);
+#define board_bus_master(enable) (*board_bus_master_hook)(enable)
+extern void (*board_start_z80_hook)(void);
+#define board_start_z80() (*board_start_z80_hook)()
+
+// IOREQ read only
+extern __bit (*board_ioreq_pin_hook)(void);
+#define ioreq_pin() (*board_ioreq_pin_hook)()
+// MEMRQ read only
+extern __bit (*board_memrq_pin_hook)(void);
+#define memrq_pin() (*board_memrq_pin_hook)()
+// RD    read only
+extern __bit (*board_rd_pin_hook)(void);
+#define rd_pin() (*board_rd_pin_hook)()
+
+// BUSRQ write olny
+extern void (*board_set_busrq_pin_hook)(uint8_t);
+#define set_busrq_pin(v) (*board_set_busrq_pin_hook)(v)
+// RESET write olny
+extern void (*board_set_reset_pin_hook)(uint8_t);
+#define set_reset_pin(v) (*board_set_reset_pin_hook)(v)
+// NMI   write olny
+extern void (*board_set_nmi_pin_hook)(uint8_t);
+#define set_nmi_pin(v) (*board_set_nmi_pin_hook)(v)
+// INT   write olny
+extern void (*board_set_int_pin_hook)(uint8_t);
+#define set_int_pin(v) (*board_set_int_pin_hook)(v)
+// WAIT  write olny
+extern void (*board_set_wait_pin_hook)(uint8_t);
+#define set_wait_pin(v) (*board_set_wait_pin_hook)(v)
+
+#define SET_ADDR_L_PINS(v) do { LATB = (v); } while(0)
+#define SET_ADDR_H_PINS(v) do { LATD = (v); } while(0)
+#define SET_DATA_PINS(v) do { LATC = (v); } while(0)
+#define SET_DATA_DIR_OUTPUT() do { TRISC = 0x00; } while(0)
+#define SET_DATA_DIR_INPUT() do { TRISC = 0xff; } while(0)
+
 //
 // debug macros
 //

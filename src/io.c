@@ -260,11 +260,11 @@ void try_to_invoke_monitor(void) {
             return;
         }
 
-        LATE0 = 0;              // set /BUSREQ to active
+        set_busrq_pin(0);       // set /BUSREQ to active
         __delay_us(20);         // Wait a while for Z80 to release the bus
         if (CLC3IF) {           // Check /IORQ again
             // Withdraw /BUSREQ and let I/O handler to handle the break key if /IORQ is detected
-            LATE0 = 1;
+            set_busrq_pin(1);
             #ifdef CPM_MON_DEBUG
             printf("Withdraw /BUSREQ because /IORQ is active\n\r");
             #endif
@@ -275,7 +275,7 @@ void try_to_invoke_monitor(void) {
         bus_master(1);
         mon_setup();            // Hook NMI handler and assert /NMI
         bus_master(0);
-        LATE0 = 1;              // Clear /BUSREQ so that the Z80 can handle NMI
+        set_busrq_pin(1);       // Clear /BUSREQ so that the Z80 can handle NMI
 }
 
 void io_handle() {
@@ -303,23 +303,23 @@ void io_handle() {
     }
 
     // Z80 IO read cycle
-    TRISC = 0x00;               // Set as output
+    SET_DATA_DIR_OUTPUT();
     switch (io_addr) {
     case UART_CREG:
         if (key_input) {
-            LATC = 0xff;        // input available
+            SET_DATA_PINS(0xff);  // input available
         } else {
-            LATC = 0x00;        // no input available
+            SET_DATA_PINS(0x00);  // no input available
         }
         break;
     case UART_DREG:
         con_flush_buffer();
         c = getch_buffered();
-        LATC = c;               // Out the character
+        SET_DATA_PINS(c);       // Out the character
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
-            LATC = *disk_datap++;
+            SET_DATA_PINS(*disk_datap++);
         } else
         if (DEBUG_DISK) {
             printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (READ IGNORED)\n\r",
@@ -327,17 +327,17 @@ void io_handle() {
         }
         break;
     case DISK_REG_FDCST:
-        LATC = disk_stat;
+        SET_DATA_PINS(disk_stat);
         break;
     case HW_CTRL:
-        LATC = hw_ctrl_read();
+        SET_DATA_PINS(hw_ctrl_read());
         break;
     default:
         #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O read %d (%02XH)\n\r", io_addr, io_addr);
         invoke_monitor = 1;
         #endif
-        LATC = 0xff;            // Invalid data
+        SET_DATA_PINS(0xff);    // Invalid data
         break;
     }
 
@@ -348,11 +348,10 @@ void io_handle() {
     }
 
     // Let Z80 read the data
-    LATE0 = 0;                  // /BUSREQ is active
-    G3POL = 1;                  // Release wait (D-FF reset)
-    G3POL = 0;
-    while(!RA0);                // /IORQ
-    TRISC = 0xff;               // Set as input
+    set_busrq_pin(0);           // /BUSREQ is active
+    set_wait_pin(1);            // Release wait
+    while(!ioreq_pin());        // wait for /IORQ to be cleared
+    SET_DATA_DIR_INPUT();       // Set as input
 
     if (invoke_monitor) {
         goto enter_bus_master;
@@ -439,10 +438,9 @@ void io_handle() {
     //
     // Assert /BUSREQ and release /WAIT
     //
-    LATE0 = 0;          // /BUSREQ is active
-    G3POL = 1;          // Release wait (D-FF reset)
-    G3POL = 0;
-    while(!RA0);        // /IORQ
+    set_busrq_pin(0);           // /BUSREQ is active
+    set_wait_pin(1);            // Release wait
+    while(!ioreq_pin());        // wait for /IORQ to be cleared
 
     if (!do_bus_master && !invoke_monitor) {
         goto withdraw_busreq;
@@ -610,5 +608,5 @@ void io_handle() {
 
  withdraw_busreq:
     CLC3IF = 0;             // Clear interrupt flag
-    LATE0 = 1;              // /BUSREQ is deactive
+    set_busrq_pin(1);       // /BUSREQ is deactive
 }
