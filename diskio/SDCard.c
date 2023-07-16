@@ -46,22 +46,21 @@ static struct SDCard {
     uint16_t timeout;
     unsigned int calc_read_crc :1;
 } ctx_ = { 0 };
-#define ctx (&ctx_)
 
 void SDCard_end_transaction()
 {
-    struct SPI *spi = ctx->spi;
+    struct SPI *spi = ctx_.spi;
     SPI(end_transaction)(spi);
     SPI(dummy_clocks)(spi, 1);
 }
 
 int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t timeout)
 {
-    ctx->spi = SPI0_ctx;
-    ctx->clock_delay = clock_delay;
-    ctx->timeout = timeout;
-    ctx->calc_read_crc = 0;
-    struct SPI *spi = ctx->spi;
+    ctx_.spi = SPI(ctx);
+    ctx_.clock_delay = clock_delay;
+    ctx_.timeout = timeout;
+    ctx_.calc_read_crc = 0;
+    struct SPI *spi = ctx_.spi;
     SPI(begin)(spi);
 
     uint8_t buf[5];
@@ -129,7 +128,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
         return SDCARD_BADRESPONSE;
     }
 
-    SPI(configure)(spi, ctx->clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(configure)(spi, ctx_.clock_delay, SPI_MSBFIRST, SPI_MODE0);
 
     dprintf(("SD Card: initialize ... succeeded\n\r"));
 
@@ -138,7 +137,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
 
 static uint8_t __SDCard_wait_response(uint8_t no_response, unsigned int attempts)
 {
-    struct SPI *spi = ctx->spi;
+    struct SPI *spi = ctx_.spi;
     uint8_t response;
     do {
         response = SPI(receive_byte)(spi);
@@ -148,7 +147,7 @@ static uint8_t __SDCard_wait_response(uint8_t no_response, unsigned int attempts
 
 static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
 {
-    struct SPI *spi = ctx->spi;
+    struct SPI *spi = ctx_.spi;
     uint8_t buf[6];
     uint8_t response;
 
@@ -163,7 +162,7 @@ static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
     SPI(dummy_clocks)(spi, 1);
     SPI(send)(spi, buf, 6);
 
-    response = __SDCard_wait_response(0xff, ctx->timeout);
+    response = __SDCard_wait_response(0xff, ctx_.timeout);
     *r1 = response;
     if (response == 0xff) {
         return SDCARD_TIMEOUT;
@@ -174,7 +173,7 @@ static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
 
 int SDCard_read512(uint32_t addr, unsigned int offs, void *buf, unsigned int count)
 {
-    struct SPI *spi = ctx->spi;
+    struct SPI *spi = ctx_.spi;
     int result;
     uint8_t response;
     uint16_t crc, resp_crc;
@@ -205,11 +204,11 @@ int SDCard_read512(uint32_t addr, unsigned int offs, void *buf, unsigned int cou
     crc = 0;
     for (int i = 0; i < offs; i++) {
         response = SPI(receive_byte)(spi);
-        if (ctx->calc_read_crc)
+        if (ctx_.calc_read_crc)
             crc = __SDCard_crc16(crc, &response, 1);
     }
     SPI(receive)(spi, buf, count);
-    if (ctx->calc_read_crc)
+    if (ctx_.calc_read_crc)
         crc = __SDCard_crc16(crc, buf, count);
     for (unsigned int i = 0; i < 512 - offs - count; i++) {
         response = SPI(receive_byte)(spi);
@@ -221,7 +220,7 @@ int SDCard_read512(uint32_t addr, unsigned int offs, void *buf, unsigned int cou
 
     resp_crc = (uint16_t)SPI(receive_byte)(spi) << 8;
     resp_crc |= SPI(receive_byte)(spi);
-    if (ctx->calc_read_crc && resp_crc != crc) {
+    if (ctx_.calc_read_crc && resp_crc != crc) {
         dprintf(("SD Card: read512: CRC error (%04x != %04x, retry=%d)\n\r",
                  crc, resp_crc, retry));
         if (--retry < 1) {
@@ -241,7 +240,7 @@ int SDCard_read512(uint32_t addr, unsigned int offs, void *buf, unsigned int cou
 
 int SDCard_write512(uint32_t addr, unsigned int offs, const void *buf, unsigned int count)
 {
-    struct SPI *spi = ctx->spi;
+    struct SPI *spi = ctx_.spi;
     int result;
     uint8_t response;
     uint16_t crc;
@@ -320,7 +319,7 @@ int SDCard_write512(uint32_t addr, unsigned int offs, const void *buf, unsigned 
 
 int SDCard_command(uint8_t command, uint32_t argument, void *response_buffer, unsigned int length)
 {
-    struct SPI *spi = ctx->spi;
+    struct SPI *spi = ctx_.spi;
     int result;
     uint8_t *responsep = (uint8_t*)response_buffer;
 
