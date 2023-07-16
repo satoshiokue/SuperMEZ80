@@ -23,7 +23,6 @@ DISK_SRCS := $(DISKIO_DIR)/SDCard.c \
     $(DISKIO_DIR)/diskio.c $(DISKIO_DIR)/utils.c
 SRCS := $(SRC_DIR)/supermez80.c $(SRC_DIR)/disas.c $(SRC_DIR)/disas_z80.c $(SRC_DIR)/memory.c \
     $(SRC_DIR)/monitor.c $(SRC_DIR)/io.c \
-    $(SRC_DIR)/boards/emuz80_common.c \
     $(SRC_DIR)/boards/supermez80_spi.c \
     $(SRC_DIR)/board.c
 
@@ -35,7 +34,7 @@ HDRS := $(SRC_DIR)/supermez80.h $(SRC_DIR)/picconfig.h \
         $(BUILD_DIR)/ipl.inc $(BUILD_DIR)/nmimon.inc \
         $(BUILD_DIR)/rstmon.inc $(BUILD_DIR)/mmu_exercise.inc \
         $(DISKIO_DIR)/pic18f47q43_spi.c \
-        $(SRC_DIR)/boards/emuz80_common.h
+        $(SRC_DIR)/boards/emuz80_common.c
 
 all: $(BUILD_DIR)/supermez80.hex $(BUILD_DIR)/drivea.dsk
 

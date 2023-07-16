@@ -27,9 +27,8 @@
 #define BOARD_DEPENDENT_SOURCE
 
 #include <supermez80.h>
-#include "emuz80_common.h"
 
-void emuz80_common_sys_init()
+static void emuz80_common_sys_init()
 {
     // System initialize
     OSCFRQ = 0x08;      // 64MHz internal OSC
@@ -58,4 +57,116 @@ void emuz80_common_sys_init()
     RA6PPS = 0x26;      // RA6->UART3:TX3;
 
     U3ON = 1;           // Serial port enable
+
+    // RESET (RE1) output pin
+    LAT(Z80_RESET) = 0;         // Reset
+    TRIS(Z80_RESET) = 0;        // Set as output
+
+    // /BUSREQ (RE0) output pin
+    LAT(Z80_BUSRQ) = 0;         // BUS request
+    TRIS(Z80_BUSRQ) = 0;        // Set as output
+
+    // Address bus A7-A0 pin
+    LAT(Z80_ADDR_L) = 0x00;
+    TRIS(Z80_ADDR_L) = 0x00;    // Set as output
+
+    // Data bus D7-D0 pin
+    LAT(Z80_DATA) = 0x00;
+    TRIS(Z80_DATA) = 0x00;      // Set as output
+}
+
+static void emuz80_common_start_z80(void)
+{
+    // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
+    WPU(Z80_ADDR_H) = 0xff;     // Week pull up
+    TRIS(Z80_ADDR_H) = 0xff;    // Set as input
+
+    // Address bus A7-A0 pin
+    WPU(Z80_ADDR_L) = 0xff;     // Week pull up
+    TRIS(Z80_ADDR_L) = 0xff;    // Set as input
+
+    // Data bus D7-D0 input pin
+    WPU(Z80_DATA) = 0xff;       // Week pull up
+    TRIS(Z80_DATA) = 0xff;      // Set as input
+
+    // /IORQ input pin
+    WPU(Z80_IOREQ) = 1;         // Week pull up
+    TRIS(Z80_IOREQ) = 1;        // Set as input
+
+    // /MREQ input pin
+    #ifdef Z80_MEMRQ
+    WPU(Z80_MEMRQ) = 1;         // Week pull up
+    TRIS(Z80_MEMRQ) = 1;        // Set as input
+    #endif
+
+    // /RD input pin
+    WPU(Z80_RD) = 1;            // Week pull up
+    TRIS(Z80_RD) = 1;           // Set as input
+
+    // /WR input pin
+    #ifdef Z80_WR
+    WPU(Z80_WR) = 1;            // Week pull up
+    TRIS(Z80_WR) = 1;           // Set as input
+    #endif
+
+    // /M1 input pin
+    #ifdef Z80_M1
+    WPU(Z80_M1) = 1;            // Week pull up
+    TRIS(Z80_M1) = 1;           // Set as input
+    #endif
+
+    // /RFSH input pin
+    #ifdef Z80_RFSH
+    WPU(Z80_RFSH) = 1;          // Week pull up
+    TRIS(Z80_RFSH) = 1;         // Set as input
+    #endif
+
+    // /WAIT (RD7) output pin
+    LAT(Z80_WAIT) = 1;          // WAIT
+    TRIS(Z80_WAIT) = 0;         // Set as output
+}
+
+static __bit emuz80_common_ioreq_pin(void) { return R(Z80_IOREQ); }
+static __bit emuz80_common_memrq_pin(void) { return R(Z80_MEMRQ); }
+static __bit emuz80_common_rd_pin(void) { return R(Z80_RD); }
+static void emuz80_common_set_busrq_pin(uint8_t v) { LAT(Z80_BUSRQ) = (__bit)(v & 0x01); }
+static void emuz80_common_set_reset_pin(uint8_t v) { LAT(Z80_RESET) = (__bit)(v & 0x01); }
+
+static void emuz80_common_set_nmi_pin(uint8_t v) {
+    #ifdef Z80_NMI
+    LAT(Z80_NMI) = (__bit)(v & 0x01);
+    #endif
+}
+
+static void emuz80_common_set_int_pin(uint8_t v) {
+    #ifdef Z80_INT
+    LAT(Z80_INT) = (__bit)(v & 0x01);
+    #endif
+}
+
+static void emuz80_common_set_mq_pin(uint8_t v) {
+    #ifdef Z80_M1
+    LAT(Z80_M1) = (__bit)(v & 0x01);
+    #endif
+}
+
+static void emuz80_common_set_wait_pin(uint8_t v) {
+    #ifdef Z80_WAIT
+    LAT(Z80_WAIT) = (__bit)(v & 0x01);
+    #endif
+}
+
+static void emuz80_common_init()
+{
+    board_sys_init_hook         = emuz80_common_sys_init;
+    board_start_z80_hook        = emuz80_common_start_z80;
+
+    board_ioreq_pin_hook        = emuz80_common_ioreq_pin;
+    board_memrq_pin_hook        = emuz80_common_memrq_pin;
+    board_rd_pin_hook           = emuz80_common_rd_pin;
+    board_set_busrq_pin_hook    = emuz80_common_set_busrq_pin;
+    board_set_reset_pin_hook    = emuz80_common_set_reset_pin;
+    board_set_nmi_pin_hook      = emuz80_common_set_nmi_pin;
+    board_set_int_pin_hook      = emuz80_common_set_int_pin;
+    board_set_wait_pin_hook     = emuz80_common_set_wait_pin;
 }

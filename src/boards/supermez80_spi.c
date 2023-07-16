@@ -28,7 +28,6 @@
 
 #include <supermez80.h>
 #include <mcp23s08.h>
-#include "emuz80_common.h"
 
 #define Z80_IOREQ   A0
 #define Z80_MEMRQ   A1
@@ -51,43 +50,11 @@
 #define SPI_SS      E2
 // RE3 is occupied by PIC MCLR
 
-static __bit supermez80_spi_ioreq_pin(void) { return R(Z80_IOREQ); }
-static __bit supermez80_spi_memrq_pin(void) { return R(Z80_MEMRQ); }
-static __bit supermez80_spi_rd_pin(void) { return R(Z80_RD); }
-static void supermez80_spi_set_busrq_pin(uint8_t v) { LAT(Z80_BUSRQ) = (__bit)(v & 0x01); }
-static void supermez80_spi_set_reset_pin(uint8_t v) { LAT(Z80_RESET) = (__bit)(v & 0x01); }
-
-static void supermez80_spi_set_nmi_pin(uint8_t v) {
-    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, v);
-}
-
-static void supermez80_spi_set_int_pin(uint8_t v) {
-    // we does not have INT pin
-    // LAT(Z80_INT) = v;
-}
-
-static void supermez80_spi_set_wait_pin(uint8_t v)
-{
-    if (v == 1) {
-        // Release wait (D-FF reset)
-        G3POL = 1;
-        G3POL = 0;
-    } else {
-        // not implemented
-    }
-}
+#include "emuz80_common.c"
 
 static void supermez80_spi_sys_init()
 {
     emuz80_common_sys_init();
-
-    // RESET (RE1) output pin
-    LAT(Z80_RESET) = 0;         // Reset
-    TRIS(Z80_RESET) = 0;        // Set as output
-
-    // /BUSREQ (RE0) output pin
-    LAT(Z80_BUSRQ) = 0;         // BUS request
-    TRIS(Z80_BUSRQ) = 0;        // Set as output
 
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
     LAT(Z80_ADDR_H) = 0x00;
@@ -96,14 +63,6 @@ static void supermez80_spi_sys_init()
     #else
     TRIS(Z80_ADDR_H) = 0x40;    // Set as output except 6:/RFSH
     #endif
-
-    // Address bus A7-A0 pin
-    LAT(Z80_ADDR_L) = 0x00;
-    TRIS(Z80_ADDR_L) = 0x00;    // Set as output
-
-    // Data bus D7-D0 pin
-    LAT(Z80_DATA) = 0x00;
-    TRIS(Z80_DATA) = 0x00;      // Set as output
 
     // SPI /CS output pin
     LAT(SPI_SS) = 1;            // deactive
@@ -167,44 +126,7 @@ static void supermez80_spi_bus_master(int enable)
 
 static void supermez80_spi_start_z80(void)
 {
-    // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
-    WPU(Z80_ADDR_H) = 0xff;     // Week pull up
-    TRIS(Z80_ADDR_H) = 0xff;    // Set as input
-
-    // Address bus A7-A0 pin
-    WPU(Z80_ADDR_L) = 0xff;     // Week pull up
-    TRIS(Z80_ADDR_L) = 0xff;    // Set as input
-
-    // Data bus D7-D0 input pin
-    WPU(Z80_DATA) = 0xff;       // Week pull up
-    TRIS(Z80_DATA) = 0xff;      // Set as input
-
-    // /IORQ input pin
-    WPU(Z80_IOREQ) = 1;         // Week pull up
-    TRIS(Z80_IOREQ) = 1;        // Set as input
-
-    // /MREQ input pin
-    WPU(Z80_MEMRQ) = 1;         // Week pull up
-    TRIS(Z80_MEMRQ) = 1;        // Set as input
-
-    // /RD input pin
-    WPU(Z80_RD) = 1;            // Week pull up
-    TRIS(Z80_RD) = 1;           // Set as input
-
-    #ifdef Z80_USE_M1_FOR_SRAM_OE
-    // /M1 input pin
-    WPU(Z80_M1) = 1;            // Week pull up
-    TRIS(Z80_M1) = 1;           // Set as input
-    #endif
-
-    // /RFSH input pin
-    WPU(Z80_RFSH) = 1;          // Week pull up
-    TRIS(Z80_RFSH) = 1;         // Set as input
-
-    // /WAIT (RD7) output pin
-    LAT(Z80_WAIT) = 1;          // WAIT
-    TRIS(Z80_WAIT) = 0;         // Set as output
-
+    emuz80_common_start_z80();
 
     //========== CLC pin assign ===========
     // 0,1,4,5 = Port A, C
@@ -307,18 +229,29 @@ static void supermez80_spi_start_z80(void)
     LAT(Z80_RESET) = 1;  // Release reset
 }
 
+static void supermez80_spi_set_nmi_pin(uint8_t v) {
+    mcp23s08_write(MCP23S08_ctx, GPIO_NMI, v);
+}
+
+static void supermez80_spi_set_wait_pin(uint8_t v)
+{
+    if (v == 1) {
+        // Release wait (D-FF reset)
+        G3POL = 1;
+        G3POL = 0;
+    } else {
+        // not implemented
+    }
+}
+
 void supermez80_spi_init()
 {
+    emuz80_common_init();
+
     board_sys_init_hook = supermez80_spi_sys_init;
     board_bus_master_hook = supermez80_spi_bus_master;
     board_start_z80_hook = supermez80_spi_start_z80;
 
-    board_ioreq_pin_hook     = supermez80_spi_ioreq_pin;
-    board_memrq_pin_hook     = supermez80_spi_memrq_pin;
-    board_rd_pin_hook        = supermez80_spi_rd_pin;
-    board_set_busrq_pin_hook = supermez80_spi_set_busrq_pin;
-    board_set_reset_pin_hook = supermez80_spi_set_reset_pin;
     board_set_nmi_pin_hook   = supermez80_spi_set_nmi_pin;
-    board_set_int_pin_hook   = supermez80_spi_set_int_pin;
     board_set_wait_pin_hook  = supermez80_spi_set_wait_pin;
 }
