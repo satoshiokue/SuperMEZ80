@@ -28,25 +28,32 @@
 #include <mcp23s08.h>
 #include "emuz80_common.h"
 
-#define Z80_IOREQ	RA0
-#define Z80_MEMRQ	RA1
-// RA2 is assigned to WE of SRAM
-// RA3 is assigned to CLK which controlled by NCO
-// RA4 is assigned to OE of SRAM
-#define Z80_RD		RA5
+#define Z80_IOREQ   A0
+#define Z80_MEMRQ   A1
+#define SRAM_WE     A2
+#define Z80_CLK     A3
+#define SRAM_OE     A4
+#define Z80_RD      A5
 // RA6 is used as UART TXD
 // RA7 is used as UART RXD
 
-#define Z80_BUSRQ	RE0
-#define Z80_RESET	RE1
-// RE2 is assigned to SS of SPI
+// RD0~5 are used as address high A8~13
+#ifdef Z80_USE_M1_FOR_SRAM_OE
+#define Z80_M1      D5
+#endif
+#define Z80_RFSH    D6
+#define Z80_WAIT    D7
+
+#define Z80_BUSRQ   E0
+#define Z80_RESET   E1
+#define SPI_SS      E2
 // RE3 is occupied by PIC MCLR
 
-static __bit supermez80_spi_ioreq_pin(void) { return Z80_IOREQ; }
-static __bit supermez80_spi_memrq_pin(void) { return Z80_MEMRQ; }
-static __bit supermez80_spi_rd_pin(void) { return Z80_RD; }
-static void supermez80_spi_set_busrq_pin(uint8_t v) { Z80_BUSRQ = (__bit)(v & 0x01); }
-static void supermez80_spi_set_reset_pin(uint8_t v) { Z80_RESET = (__bit)(v & 0x01); }
+static __bit supermez80_spi_ioreq_pin(void) { return R(Z80_IOREQ); }
+static __bit supermez80_spi_memrq_pin(void) { return R(Z80_MEMRQ); }
+static __bit supermez80_spi_rd_pin(void) { return R(Z80_RD); }
+static void supermez80_spi_set_busrq_pin(uint8_t v) { LAT(Z80_BUSRQ) = (__bit)(v & 0x01); }
+static void supermez80_spi_set_reset_pin(uint8_t v) { LAT(Z80_RESET) = (__bit)(v & 0x01); }
 
 static void supermez80_spi_set_nmi_pin(uint8_t v) {
     mcp23s08_write(MCP23S08_ctx, GPIO_NMI, v);
@@ -54,7 +61,7 @@ static void supermez80_spi_set_nmi_pin(uint8_t v) {
 
 static void supermez80_spi_set_int_pin(uint8_t v) {
     // we does not have INT pin
-    // Z80_INT = v;
+    // LAT(Z80_INT) = v;
 }
 
 static void supermez80_spi_set_wait_pin(uint8_t v)
@@ -73,156 +80,146 @@ static void supermez80_spi_sys_init()
     emuz80_common_sys_init();
 
     // RESET (RE1) output pin
-    LATE1 = 0;          // Reset
-    TRISE1 = 0;         // Set as output
+    LAT(Z80_RESET) = 0;         // Reset
+    TRIS(Z80_RESET) = 0;        // Set as output
 
     // /BUSREQ (RE0) output pin
-    LATE0 = 0;          // BUS request
-    TRISE0 = 0;         // Set as output
+    LAT(Z80_BUSRQ) = 0;         // BUS request
+    TRIS(Z80_BUSRQ) = 0;        // Set as output
 
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
-    LATD = 0x00;
+    LAT(Z80_ADDR_H) = 0x00;
     #ifdef Z80_USE_M1_FOR_SRAM_OE
-    TRISD = 0x60;       // Set as output except 6:/RFSH and 5:/M1
+    TRIS(Z80_ADDR_H) = 0x60;    // Set as output except 6:/RFSH and 5:/M1
     #else
-    TRISD = 0x40;       // Set as output except 6:/RFSH
+    TRIS(Z80_ADDR_H) = 0x40;    // Set as output except 6:/RFSH
     #endif
 
-    // SPI /CS (RE2) output pin
-    LATE2 = 1;          // deactive
-    TRISE2 = 0;         // Set as output
-
     // Address bus A7-A0 pin
-    LATB = 0x00;
-    TRISB = 0x00;       // Set as output
+    LAT(Z80_ADDR_L) = 0x00;
+    TRIS(Z80_ADDR_L) = 0x00;    // Set as output
 
     // Data bus D7-D0 pin
-    LATC = 0x00;
-    TRISC = 0x00;       // Set as output
+    LAT(Z80_DATA) = 0x00;
+    TRIS(Z80_DATA) = 0x00;      // Set as output
 
-    // Z80 clock(RA3)
-#ifdef Z80_CLK
-    RA3PPS = 0x3f;      // RA3 asign NCO1
-    TRISA3 = 0;         // NCO output pin
-    NCO1INC = Z80_CLK * 2 / 61;
-    // NCO1INC = 524288;   // 15.99MHz
-    NCO1CLK = 0x00;     // Clock source Fosc
-    NCO1PFM = 0;        // FDC mode
-    NCO1OUT = 1;        // NCO output enable
-    NCO1EN = 1;         // NCO enable
+    // SPI /CS output pin
+    LAT(SPI_SS) = 1;            // deactive
+    TRIS(SPI_SS) = 0;           // Set as output
+
+    // Z80 clock
+#ifdef Z80_CLK_HZ
+    PPS(Z80_CLK) = 0x3f;        // asign NCO1
+    TRIS(Z80_CLK) = 0;          // NCO output pin
+    NCO1INC = Z80_CLK_HZ * 2 / 61;
+    NCO1CLK = 0x00;             // Clock source Fosc
+    NCO1PFM = 0;                // FDC mode
+    NCO1OUT = 1;                // NCO output enable
+    NCO1EN = 1;                 // NCO enable
 #else
     // Disable clock output for Z80 (Use external clock for Z80)
-    RA3PPS = 0;         // select LATxy
-    TRISA3 = 1;         // set as input
-    NCO1OUT = 0;        // NCO output disable
-    NCO1EN = 0;         // NCO disable
+    PPS(Z80_CLK) = 0;           // select LATxy
+    TRIS(Z80_CLK) = 1;          // set as input
+    NCO1OUT = 0;                // NCO output disable
+    NCO1EN = 0;                 // NCO disable
 #endif
 
-    // /WE (RA2) output pin
-    LATA2 = 1;          //
-    TRISA2 = 0;         // Set as output
-    RA2PPS = 0x00;      // LATA2 -> RA2
+    // /WE output pin
+    LAT(SRAM_WE) = 1;
+    TRIS(SRAM_WE) = 0;          // Set as output
+    PPS(SRAM_WE) = 0x00;        // unbind with CLC
 
-    // /OE (RA4) output pin
-    LATA4 = 1;
-    TRISA4 = 0;         // Set as output
-    RA4PPS = 0x00;      // unbind with CLC1
+    // /OE output pin
+    LAT(SRAM_OE) = 1;
+    TRIS(SRAM_OE) = 0;          // Set as output
+    PPS(SRAM_OE) = 0x00;        // unbind with CLC
 }
 
 static void supermez80_spi_bus_master(int enable)
 {
     if (enable) {
-        RA4PPS = 0x00;      // unbind CLC1 and /OE (RA4)
-        RA2PPS = 0x00;      // unbind CLC2 and /WE (RA2)
-        LATA4 = 1;          // deactivate /OE
-        LATA2 = 1;          // deactivate /WE
+        PPS(SRAM_OE) = 0x00;        // unbind CLC and /OE
+        PPS(SRAM_WE) = 0x00;        // unbind CLC and /WE
+        LAT(SRAM_OE) = 1;           // deactivate /OE
+        LAT(SRAM_WE) = 1;           // deactivate /WE
 
         // Set address bus as output
         #ifdef Z80_USE_M1_FOR_SRAM_OE
-        TRISD = 0x60;       // A15-A8 pin except 6:/RFSH and 5:/M1
+        TRIS(Z80_ADDR_H) = 0x60;    // A15-A8 pin except 6:/RFSH and 5:/M1
         #else
-        TRISD = 0x40;       // A15-A8 pin except 6:/RFSH
+        TRIS(Z80_ADDR_H) = 0x40;    // A15-A8 pin except 6:/RFSH
         #endif
-        TRISB = 0x00;       // A7-A0
+        TRIS(Z80_ADDR_L) = 0x00;    // A7-A0
     } else {
         // Set address bus as input
         dma_release_addrbus();
 
-        TRISD = 0x7f;       // A15-A8 pin except 7:/WAIT
-        TRISB = 0xff;       // A7-A0 pin
-        TRISC = 0xff;       // D7-D0 pin
+        TRIS(Z80_ADDR_H) = 0x7f;    // A15-A8 pin except 7:/WAIT
+        TRIS(Z80_ADDR_L) = 0xff;    // A7-A0 pin
+        TRIS(Z80_DATA) = 0xff;      // D7-D0 pin
 
-        RA4PPS = 0x01;      // CLC1 -> RA4 -> /OE
-        RA2PPS = 0x02;      // CLC2 -> RA2 -> /WE
+        PPS(SRAM_OE) = 0x01;        // CLC1 -> /OE
+        PPS(SRAM_WE) = 0x02;        // CLC2 -> /WE
     }
 }
 
 static void supermez80_spi_start_z80(void)
 {
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
-    ANSELD = 0x00;      // Disable analog function
-    WPUD = 0xff;        // Week pull up
-    TRISD = 0xff;       // Set as input
+    WPU(Z80_ADDR_H) = 0xff;     // Week pull up
+    TRIS(Z80_ADDR_H) = 0xff;    // Set as input
 
     // Address bus A7-A0 pin
-    ANSELB = 0x00;      // Disable analog function
-    WPUB = 0xff;        // Week pull up
-    TRISB = 0xff;       // Set as input
+    WPU(Z80_ADDR_L) = 0xff;     // Week pull up
+    TRIS(Z80_ADDR_L) = 0xff;    // Set as input
 
     // Data bus D7-D0 input pin
-    ANSELC = 0x00;      // Disable analog function
-    WPUC = 0xff;        // Week pull up
-    TRISC = 0xff;       // Set as input
+    WPU(Z80_DATA) = 0xff;       // Week pull up
+    TRIS(Z80_DATA) = 0xff;      // Set as input
 
-    // /IORQ (RA0) input pin
-    ANSELA0 = 0;        // Disable analog function
-    WPUA0 = 1;          // Week pull up
-    TRISA0 = 1;         // Set as input
+    // /IORQ input pin
+    WPU(Z80_IOREQ) = 1;         // Week pull up
+    TRIS(Z80_IOREQ) = 1;        // Set as input
 
-    // /MREQ (RA1) input pin
-    ANSELA1 = 0;        // Disable analog function
-    WPUA1 = 1;          // Week pull up
-    TRISA1 = 1;         // Set as input
+    // /MREQ input pin
+    WPU(Z80_MEMRQ) = 1;         // Week pull up
+    TRIS(Z80_MEMRQ) = 1;        // Set as input
 
-    // /RD (RA5) input pin
-    ANSELA5 = 0;        // Disable analog function
-    WPUA5 = 1;          // Week pull up
-    TRISA5 = 1;         // Set as input
+    // /RD input pin
+    WPU(Z80_RD) = 1;            // Week pull up
+    TRIS(Z80_RD) = 1;           // Set as input
 
     #ifdef Z80_USE_M1_FOR_SRAM_OE
-    // /M1 (RD5) input pin
-    ANSELD5 = 0;        // Disable analog function
-    WPUD5 = 1;          // Week pull up
-    TRISD5 = 1;         // Set as input
+    // /M1 input pin
+    WPU(Z80_M1) = 1;            // Week pull up
+    TRIS(Z80_M1) = 1;           // Set as input
     #endif
 
-    // /RFSH (RD6) input pin
-    ANSELD6 = 0;        // Disable analog function
-    WPUD6 = 1;          // Week pull up
-    TRISD6 = 1;         // Set as input
+    // /RFSH input pin
+    WPU(Z80_RFSH) = 1;          // Week pull up
+    TRIS(Z80_RFSH) = 1;         // Set as input
 
     // /WAIT (RD7) output pin
-    ANSELD7 = 0;        // Disable analog function
-    LATD7 = 1;          // WAIT
-    TRISD7 = 0;         // Set as output
+    LAT(Z80_WAIT) = 1;          // WAIT
+    TRIS(Z80_WAIT) = 0;         // Set as output
 
 
     //========== CLC pin assign ===========
     // 0,1,4,5 = Port A, C
     // 2,3,6,7 = Port B, D
-    CLCIN0PPS = 0x01;   // RA1 <- /MREQ
-    CLCIN1PPS = 0x00;   // RA0 <- /IORQ
-    CLCIN2PPS = 0x1e;   // RD6 <- /RFSH
+    CLCIN0PPS = 0x01;           // RA1 <- /MREQ
+    CLCIN1PPS = 0x00;           // RA0 <- /IORQ
+    CLCIN2PPS = 0x1e;           // RD6 <- /RFSH
     #ifdef Z80_USE_M1_FOR_SRAM_OE
-    CLCIN3PPS = 0x1d;   // RD5 <- /M1
+    CLCIN3PPS = 0x1d;           // RD5 <- /M1
     #endif
-    CLCIN4PPS = 0x05;   // RA5 <- /RD
+    CLCIN4PPS = 0x05;           // RA5 <- /RD
 
     // 1,2,5,6 = Port A, C
     // 3,4,7,8 = Port B, D
-    RA4PPS = 0x01;       // CLC1 -> RA4 -> /OE
-    RA2PPS = 0x02;       // CLC2 -> RA2 -> /WE
-    RD7PPS = 0x03;       // CLC3 -> RD7 -> /WAIT
+    PPS(SRAM_OE) = 0x01;        // CLC1 -> /OE
+    PPS(SRAM_WE) = 0x02;        // CLC2 -> /WE
+    PPS(Z80_WAIT) = 0x03;       // CLC3 -> /WAIT
 
     //========== CLC1 /OE ==========
     CLCSELECT = 0;       // CLC1 select
@@ -304,8 +301,8 @@ static void supermez80_spi_start_z80(void)
     IVTLOCKbits.IVTLOCKED = 0x01;
 
     // Z80 start
-    LATE0 = 1;           // /BUSREQ=1
-    LATE1 = 1;           // Release reset
+    LAT(Z80_BUSRQ) = 1;  // /BUSREQ=1
+    LAT(Z80_RESET) = 1;  // Release reset
 }
 
 void supermez80_spi_init()

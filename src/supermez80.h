@@ -24,14 +24,14 @@
 //#define CPM_MON_DEBUG
 
 // Z80 clock frequency (select one or use external clock)
-//#define Z80_CLK 3997696UL       //  4.0 MHz (NCOxINC = 0x20000, 64MHz/8/2)
-//#define Z80_CLK 4568778UL       //  4.6 MHz (NCOxINC = 0x24924, 64MHz/7/2)
-//#define Z80_CLK 5330241UL       //  5.3 MHz (NCOxINC = 0x2AAAA, 64MHz/6/2)
-#define Z80_CLK 6396277UL       //  6.4 MHz (NCOxINC = 0x33333, 64MHz/5/2)
-//#define Z80_CLK 7995392UL       //  8.0 MHz (NCOxINC = 0x40000, 64MHz/4/2)
-//#define Z80_CLK 10660482UL      // 10.7 MHz (NCOxINC = 0x55555, 64MHz/3/2)
-//#define Z80_CLK 12792615UL       //  12.8 MHz (NCOxINC = 0x66666, 64MHz/5)
-//#define Z80_CLK 15990784UL      // 16.0 MHz (NCOxINC = 0x80000, 64MHz/2/2)
+//#define Z80_CLK_HZ 3997696UL        //  4.0 MHz (NCOxINC = 0x20000, 64MHz/8/2)
+//#define Z80_CLK_HZ 4568778UL        //  4.6 MHz (NCOxINC = 0x24924, 64MHz/7/2)
+//#define Z80_CLK_HZ 5330241UL        //  5.3 MHz (NCOxINC = 0x2AAAA, 64MHz/6/2)
+#define Z80_CLK_HZ 6396277UL        //  6.4 MHz (NCOxINC = 0x33333, 64MHz/5/2)
+//#define Z80_CLK_HZ 7995392UL        //  8.0 MHz (NCOxINC = 0x40000, 64MHz/4/2)
+//#define Z80_CLK_HZ 10660482UL       // 10.7 MHz (NCOxINC = 0x55555, 64MHz/3/2)
+//#define Z80_CLK_HZ 12792615UL       //  12.8 MHz (NCOxINC = 0x66666, 64MHz/5)
+//#define Z80_CLK_HZ 15990784UL       // 16.0 MHz (NCOxINC = 0x80000, 64MHz/2/2)
 
 //#define Z80_USE_M1_FOR_SRAM_OE
 
@@ -233,11 +233,24 @@ extern void (*board_set_int_pin_hook)(uint8_t);
 extern void (*board_set_wait_pin_hook)(uint8_t);
 #define set_wait_pin(v) (*board_set_wait_pin_hook)(v)
 
-#define SET_ADDR_L_PINS(v) do { LATB = (v); } while(0)
-#define SET_ADDR_H_PINS(v) do { LATD = (v); } while(0)
-#define SET_DATA_PINS(v) do { LATC = (v); } while(0)
-#define SET_DATA_DIR_OUTPUT() do { TRISC = 0x00; } while(0)
-#define SET_DATA_DIR_INPUT() do { TRISC = 0xff; } while(0)
+#define Z80_DATA	C
+#define Z80_ADDR_H	D
+#define Z80_ADDR_L	B
+#define PORT_CAT(x, y) PORT_CAT_(x, y)
+#define PORT_CAT_(x, y) x ## y
+#define PORT_CAT3(x, y, z) PORT_CAT3_(x, y, z)
+#define PORT_CAT3_(x, y, z) x ## y ## z
+#define TRIS(port) PORT_CAT(TRIS, port)
+#define LAT(port) PORT_CAT(LAT, port)
+#define R(port) PORT_CAT(R, port)
+#define PPS(port) PORT_CAT3(R, port, PPS)
+#define WPU(port) PORT_CAT(WPU, port)
+
+#define SET_ADDR_L_PINS(v) do { LAT(Z80_ADDR_L) = (v); } while(0)
+#define SET_ADDR_H_PINS(v) do { LAT(Z80_ADDR_H) = (v); } while(0)
+#define SET_DATA_PINS(v) do { LAT(Z80_DATA) = (v); } while(0)
+#define SET_DATA_DIR_OUTPUT() do { TRIS(Z80_DATA) = 0x00; } while(0)
+#define SET_DATA_DIR_INPUT() do { TRIS(Z80_DATA) = 0xff; } while(0)
 
 //
 // debug macros
