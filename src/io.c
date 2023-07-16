@@ -24,8 +24,6 @@
     Written by Tetsuya Suzuki
 */
 
-#define BOARD_DEPENDENT_SOURCE
-
 #include <supermez80.h>
 #include <stdio.h>
 #include <ff.h>
@@ -297,10 +295,10 @@ void io_handle() {
         return;
 
     int do_bus_master = 0;
-    uint8_t io_addr = PORTB;
-    uint8_t io_data = PORTC;
+    uint8_t io_addr = PORT(Z80_ADDR_L);
+    uint8_t io_data = PORT(Z80_DATA);
 
-    if (RA5) {
+    if (rd_pin()) {
         goto io_write;
     }
 
