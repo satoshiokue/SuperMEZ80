@@ -30,6 +30,11 @@
 #include <stdio.h>
 #include <SDCard.h>
 #include <mcp23s08.h>
+#include <picregister.h>
+
+#define Z80_DATA	C
+#define Z80_ADDR_H	D
+#define Z80_ADDR_L	B
 
 #define Z80_IOREQ   A0
 #define Z80_MEMRQ   A1

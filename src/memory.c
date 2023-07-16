@@ -109,7 +109,7 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)low_addr_mask + 1));
 
     board_setup_addrbus(dest);
-    SET_DATA_DIR_OUTPUT();  // Set as output to write to the SRAM
+    set_data_dir(0x00);     // Set as output to write to the SRAM
     board_write_to_sram(addr, (uint8_t*)buf, len - second_half);
 
     if (0 < second_half) {
@@ -128,7 +128,7 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)low_addr_mask + 1));
 
     board_setup_addrbus(src);
-    SET_DATA_DIR_INPUT();  // Set as input to read from the SRAM
+    set_data_dir(0xff);     // Set as input to read from the SRAM
     board_read_from_sram(addr, (uint8_t*)buf, len - second_half);
 
     if (0 < second_half) {

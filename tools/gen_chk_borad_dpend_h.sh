@@ -8,6 +8,10 @@ gen_chk_board_depend_h()
     echo
     echo "#ifndef BOARD_DEPENDENT_SOURCE"
     for port_group in A B C D E; do
+        for register_name in PORT LAT TRIS WPU; do
+            echo "#undef ${register_name}${port_group}"
+            echo "#define ${register_name}${port_group} ERROR: Do not touch PIC ports directly here!"
+        done
         for port_number in 0 1 2 3 4 5 6 7; do
             for register_name in R LAT TRIS WPU PPS; do
                 echo "#undef ${register_name}${port_group}${port_number}"

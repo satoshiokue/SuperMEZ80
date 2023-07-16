@@ -132,16 +132,16 @@ void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
     unsigned int i;
 
     ab.w = addr;
-    SET_ADDR_H_PINS(ab.h);
-    SET_ADDR_L_PINS(ab.l);
+    LAT(Z80_ADDR_H) = ab.h;
+    LAT(Z80_ADDR_L) = ab.l;
     for(i = 0; i < len; i++) {
         LAT(SRAM_WE) = 0;      // activate /WE
-        SET_DATA_PINS(((uint8_t*)buf)[i]);
+        LAT(Z80_DATA) = ((uint8_t*)buf)[i];
         LAT(SRAM_WE) = 1;      // deactivate /WE
-        SET_ADDR_L_PINS(++ab.l);
+        LAT(Z80_ADDR_L) = ++ab.l;
         if (ab.l == 0) {
             ab.h++;
-            SET_ADDR_H_PINS(ab.h);
+            LAT(Z80_ADDR_H) = ab.h;
         }
     }
 }
@@ -152,20 +152,25 @@ void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned int len)
     unsigned int i;
 
     ab.w = addr;
-    SET_ADDR_H_PINS(ab.h);
-    SET_ADDR_L_PINS(ab.l);
+    LAT(Z80_ADDR_H) = ab.h;
+    LAT(Z80_ADDR_L) = ab.l;
     for(i = 0; i < len; i++) {
         LAT(SRAM_OE) = 0;      // activate /OE
-        ((uint8_t*)buf)[i] = DATA_PINS();
+        ((uint8_t*)buf)[i] = PORT(Z80_DATA);
         LAT(SRAM_OE) = 1;      // deactivate /OE
-        SET_ADDR_L_PINS(++ab.l);
+        LAT(Z80_ADDR_L) = ++ab.l;
         if (ab.l == 0) {
             ab.h++;
-            SET_ADDR_H_PINS(ab.h);
+            LAT(Z80_ADDR_H) = ab.h;
         }
     }
 }
 
+static uint8_t emuz80_common_addr_l_pins(void) { return PORT(Z80_ADDR_L); }
+static void emuz80_common_set_addr_l_pins(uint8_t v) { LAT(Z80_ADDR_L) = v; }
+static uint8_t emuz80_common_data_pins(void) { return PORT(Z80_DATA); }
+static void emuz80_common_set_data_pins(uint8_t v) { LAT(Z80_DATA) = v; }
+static void emuz80_common_set_data_dir(uint8_t v) { TRIS(Z80_DATA) = v; }
 static __bit emuz80_common_ioreq_pin(void) { return R(Z80_IOREQ); }
 static __bit emuz80_common_memrq_pin(void) { return R(Z80_MEMRQ); }
 static __bit emuz80_common_rd_pin(void) { return R(Z80_RD); }
@@ -203,6 +208,11 @@ static void emuz80_common_init()
     board_write_to_sram_hook    = emuz80_common_write_to_sram;
     board_read_from_sram_hook   = emuz80_common_read_from_sram;
 
+    board_addr_l_pins_hook      = emuz80_common_addr_l_pins;
+    board_set_addr_l_pins_hook  = emuz80_common_set_addr_l_pins;
+    board_data_pins_hook        = emuz80_common_data_pins;
+    board_set_data_pins_hook    = emuz80_common_set_data_pins;
+    board_set_data_dir_hook     = emuz80_common_set_data_dir;
     board_ioreq_pin_hook        = emuz80_common_ioreq_pin;
     board_memrq_pin_hook        = emuz80_common_memrq_pin;
     board_rd_pin_hook           = emuz80_common_rd_pin;

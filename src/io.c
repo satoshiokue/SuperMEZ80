@@ -295,31 +295,31 @@ void io_handle() {
         return;
 
     int do_bus_master = 0;
-    uint8_t io_addr = PORT(Z80_ADDR_L);
-    uint8_t io_data = PORT(Z80_DATA);
+    uint8_t io_addr = addr_l_pins();
+    uint8_t io_data = data_pins();
 
     if (rd_pin()) {
         goto io_write;
     }
 
     // Z80 IO read cycle
-    SET_DATA_DIR_OUTPUT();
+    set_data_dir(0x00);           // Set as output
     switch (io_addr) {
     case UART_CREG:
         if (key_input) {
-            SET_DATA_PINS(0xff);  // input available
+            set_data_pins(0xff);  // input available
         } else {
-            SET_DATA_PINS(0x00);  // no input available
+            set_data_pins(0x00);  // no input available
         }
         break;
     case UART_DREG:
         con_flush_buffer();
         c = getch_buffered();
-        SET_DATA_PINS(c);       // Out the character
+        set_data_pins(c);         // Out the character
         break;
     case DISK_REG_DATA:
         if (disk_datap && (disk_datap - disk_buf) < SECTOR_SIZE) {
-            SET_DATA_PINS(*disk_datap++);
+            set_data_pins(*disk_datap++);
         } else
         if (DEBUG_DISK) {
             printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (READ IGNORED)\n\r",
@@ -327,17 +327,17 @@ void io_handle() {
         }
         break;
     case DISK_REG_FDCST:
-        SET_DATA_PINS(disk_stat);
+        set_data_pins(disk_stat);
         break;
     case HW_CTRL:
-        SET_DATA_PINS(hw_ctrl_read());
+        set_data_pins(hw_ctrl_read());
         break;
     default:
         #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O read %d (%02XH)\n\r", io_addr, io_addr);
         invoke_monitor = 1;
         #endif
-        SET_DATA_PINS(0xff);    // Invalid data
+        set_data_pins(0xff);    // Invalid data
         break;
     }
 
@@ -351,7 +351,7 @@ void io_handle() {
     set_busrq_pin(0);           // /BUSREQ is active
     set_wait_pin(1);            // Release wait
     while(!ioreq_pin());        // wait for /IORQ to be cleared
-    SET_DATA_DIR_INPUT();       // Set as input
+    set_data_dir(0xff);         // Set as input
 
     if (invoke_monitor) {
         goto enter_bus_master;
