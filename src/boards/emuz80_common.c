@@ -126,6 +126,46 @@ static void emuz80_common_start_z80(void)
     TRIS(Z80_WAIT) = 0;         // Set as output
 }
 
+void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
+{
+    union address_bus_u ab;
+    unsigned int i;
+
+    ab.w = addr;
+    SET_ADDR_H_PINS(ab.h);
+    SET_ADDR_L_PINS(ab.l);
+    for(i = 0; i < len; i++) {
+        LAT(SRAM_WE) = 0;      // activate /WE
+        SET_DATA_PINS(((uint8_t*)buf)[i]);
+        LAT(SRAM_WE) = 1;      // deactivate /WE
+        SET_ADDR_L_PINS(++ab.l);
+        if (ab.l == 0) {
+            ab.h++;
+            SET_ADDR_H_PINS(ab.h);
+        }
+    }
+}
+
+void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned int len)
+{
+    union address_bus_u ab;
+    unsigned int i;
+
+    ab.w = addr;
+    SET_ADDR_H_PINS(ab.h);
+    SET_ADDR_L_PINS(ab.l);
+    for(i = 0; i < len; i++) {
+        LAT(SRAM_OE) = 0;      // activate /OE
+        ((uint8_t*)buf)[i] = DATA_PINS();
+        LAT(SRAM_OE) = 1;      // deactivate /OE
+        SET_ADDR_L_PINS(++ab.l);
+        if (ab.l == 0) {
+            ab.h++;
+            SET_ADDR_H_PINS(ab.h);
+        }
+    }
+}
+
 static __bit emuz80_common_ioreq_pin(void) { return R(Z80_IOREQ); }
 static __bit emuz80_common_memrq_pin(void) { return R(Z80_MEMRQ); }
 static __bit emuz80_common_rd_pin(void) { return R(Z80_RD); }
@@ -160,6 +200,8 @@ static void emuz80_common_init()
 {
     board_sys_init_hook         = emuz80_common_sys_init;
     board_start_z80_hook        = emuz80_common_start_z80;
+    board_write_to_sram_hook    = emuz80_common_write_to_sram;
+    board_read_from_sram_hook   = emuz80_common_read_from_sram;
 
     board_ioreq_pin_hook        = emuz80_common_ioreq_pin;
     board_memrq_pin_hook        = emuz80_common_memrq_pin;

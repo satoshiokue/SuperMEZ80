@@ -52,6 +52,33 @@
 #define SPI_SS      E2
 // RE3 is occupied by PIC MCLR
 
+#define GPIO_CS0    0
+#if defined(Z80_USE_M1_FOR_SRAM_OE)
+#define GPIO_A13    1
+#else
+#define GPIO_CS1    1
+#endif
+#define GPIO_BANK1  2
+#define GPIO_BANK2  3
+#define GPIO_NMI    4
+#define GPIO_A14    5
+#define GPIO_A15    6
+#define GPIO_BANK0  7
+
+#if defined(GPIO_A13)
+#define HIGH_ADDR_MASK   0xffffe000
+#define LOW_ADDR_MASK    0x00001fff
+#elif defined(GPIO_A14)
+#define HIGH_ADDR_MASK   0xffffc000
+#define LOW_ADDR_MASK    0x00003fff
+#elif defined(GPIO_A15)
+#define HIGH_ADDR_MASK   0xffff8000
+#define LOW_ADDR_MASK    0x00007fff
+#else
+#define HIGH_ADDR_MASK   0xffff0000
+#define LOW_ADDR_MASK    0x0000ffff
+#endif
+
 #define SPI_SDCARD_PICO_PPS  RC0PPS
 #define SPI_SDCARD_PICO_TRIS TRISC0
 #define SPI_SDCARD_CLK_PIN   ((2 << 3) | 1)  // RC1
@@ -127,6 +154,20 @@ static void supermez80_spi_sys_init()
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_NMI, MCP23S08_PINMODE_OUTPUT);
 
     //
+    // Initialize memory bank
+    //
+    set_bank_pins(0x00000);
+    #ifdef GPIO_BANK0
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK0, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_BANK1
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK1, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    #ifdef GPIO_BANK2
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_BANK2, MCP23S08_PINMODE_OUTPUT);
+    #endif
+
+    //
     // Initialize SD Card
     //
     for (int retry = 0; 1; retry++) {
@@ -138,6 +179,24 @@ static void supermez80_spi_sys_init()
             break;
         __delay_ms(200);
     }
+}
+
+static void supermez80_spi_release_addrbus(void)
+{
+    int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
+    #ifdef GPIO_A13
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A13, MCP23S08_PINMODE_INPUT);
+    #endif
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
+
+    // higher address lines must always be driven by MCP23S08
+    set_bank_pins((uint32_t)mmu_bank << 16);
+
+    #ifdef GPIO_LED
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
+    #endif
+    mcp23s08_set_pending(MCP23S08_ctx, pending);
 }
 
 static void supermez80_spi_bus_master(int enable)
@@ -157,7 +216,7 @@ static void supermez80_spi_bus_master(int enable)
         TRIS(Z80_ADDR_L) = 0x00;    // A7-A0
     } else {
         // Set address bus as input
-        dma_release_addrbus();
+        supermez80_spi_release_addrbus();
 
         TRIS(Z80_ADDR_H) = 0x7f;    // A15-A8 pin except 7:/WAIT
         TRIS(Z80_ADDR_L) = 0xff;    // A7-A0 pin
@@ -288,6 +347,64 @@ static void supermez80_spi_set_wait_pin(uint8_t v)
     }
 }
 
+static void supermez80_spi_set_bank_pins(uint32_t addr)
+{
+    uint32_t mask = 0;
+    uint32_t val = 0;
+
+    #ifdef GPIO_BANK0
+    mask |= (1 << GPIO_BANK0);
+    if ((addr >> 16) & 1) {
+        val |= (1 << GPIO_BANK0);
+    }
+    #endif
+    #ifdef GPIO_BANK1
+    mask |= (1 << GPIO_BANK1);
+    if (!((addr >> 17) & 1)) {  // invert A17 to activate CE2 of TC551001
+        val |= (1 << GPIO_BANK1);
+    }
+    #endif
+    #ifdef GPIO_BANK2
+    mask |= (1 << GPIO_BANK2);
+    if ((addr >> 18) & 1) {
+        val |= (1 << GPIO_BANK2);
+    }
+    #endif
+    mcp23s08_masked_write(MCP23S08_ctx, mask, val);
+}
+
+static void supermez80_spi_setup_addrbus(uint32_t addr)
+{
+    static int no_mcp23s08_warn = 1;
+
+    if (no_mcp23s08_warn && (addr & HIGH_ADDR_MASK) != 0) {
+        no_mcp23s08_warn = 0;
+        if (!mcp23s08_is_alive(MCP23S08_ctx)) {
+            printf("WARNING: no GPIO expander to control higher address\n\r");
+        }
+    }
+    int pending = mcp23s08_set_pending(MCP23S08_ctx, 1);
+    #ifdef GPIO_LED
+    mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
+    #endif
+    #ifdef GPIO_A13
+    mcp23s08_write(MCP23S08_ctx, GPIO_A13, ((addr >> 13) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A13, MCP23S08_PINMODE_OUTPUT);
+    #endif
+    mcp23s08_write(MCP23S08_ctx, GPIO_A14, ((addr >> 14) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_OUTPUT);
+    mcp23s08_write(MCP23S08_ctx, GPIO_A15, ((addr >> 15) & 1));
+    mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_OUTPUT);
+
+    set_bank_pins(addr);
+    mcp23s08_set_pending(MCP23S08_ctx, pending);
+}
+
+static uint16_t supermez80_spi_low_addr_mask(void)
+{
+    return LOW_ADDR_MASK;
+}
+
 void supermez80_spi_init()
 {
     emuz80_common_init();
@@ -295,6 +412,9 @@ void supermez80_spi_init()
     board_sys_init_hook = supermez80_spi_sys_init;
     board_bus_master_hook = supermez80_spi_bus_master;
     board_start_z80_hook = supermez80_spi_start_z80;
+    board_set_bank_pins_hook = supermez80_spi_set_bank_pins;
+    board_setup_addrbus_hook = supermez80_spi_setup_addrbus;
+    board_low_addr_mask_hook = supermez80_spi_low_addr_mask;
 
     board_set_nmi_pin_hook   = supermez80_spi_set_nmi_pin;
     board_set_wait_pin_hook  = supermez80_spi_set_wait_pin;

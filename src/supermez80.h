@@ -41,34 +41,8 @@
 #define SECTOR_SIZE      128
 #define TMP_BUF_SIZE     256
 
-#define GPIO_CS0    0
-#if defined(Z80_USE_M1_FOR_SRAM_OE)
-#define GPIO_A13    1
-#else
-#define GPIO_CS1    1
-#endif
-#define GPIO_BANK1  2
-#define GPIO_BANK2  3
-#define GPIO_NMI    4
-#define GPIO_A14    5
-#define GPIO_A15    6
-#define GPIO_BANK0  7
-
 #define MEM_CHECK_UNIT   TMP_BUF_SIZE * 16 // 2 KB
 #define MAX_MEM_SIZE     0x00100000        // 1 MB
-#if defined(GPIO_A13)
-#define HIGH_ADDR_MASK   0xffffe000
-#define LOW_ADDR_MASK    0x00001fff
-#elif defined(GPIO_A14)
-#define HIGH_ADDR_MASK   0xffffc000
-#define LOW_ADDR_MASK    0x00003fff
-#elif defined(GPIO_A15)
-#define HIGH_ADDR_MASK   0xffff8000
-#define LOW_ADDR_MASK    0x00007fff
-#else
-#define HIGH_ADDR_MASK   0xffff0000
-#define LOW_ADDR_MASK    0x0000ffff
-#endif
 
 //
 // Constant value definitions
@@ -191,8 +165,6 @@ extern void mem_init(void);
 #define bank_phys_addr(bank, addr) (((uint32_t)(bank) << 16) + (addr))
 #define phys_addr(addr) bank_phys_addr(mmu_bank, (addr))
 extern void set_bank_pins(uint32_t addr);
-extern void dma_acquire_addrbus(uint32_t addr);
-extern void dma_release_addrbus(void);
 extern void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len);
 extern void dma_read_from_sram(uint32_t src, void *buf, unsigned int len);
 extern void mmu_bank_config(int nbanks);
@@ -206,6 +178,16 @@ extern void (*board_bus_master_hook)(int enable);
 #define board_bus_master(enable) (*board_bus_master_hook)(enable)
 extern void (*board_start_z80_hook)(void);
 #define board_start_z80() (*board_start_z80_hook)()
+extern void (*board_set_bank_pins_hook)(uint32_t addr);
+#define set_bank_pins(addr) (*board_set_bank_pins_hook)(addr)
+extern void (*board_setup_addrbus_hook)(uint32_t addr);
+#define board_setup_addrbus(addr) (*board_setup_addrbus_hook)(addr)
+extern uint16_t (*board_low_addr_mask_hook)(void);
+#define board_low_addr_mask(addr) (*board_low_addr_mask_hook)()
+extern void (*board_write_to_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len);
+#define board_write_to_sram(addr, buf, len) (*board_write_to_sram_hook)(addr, buf, len)
+extern void (*board_read_from_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len);
+#define board_read_from_sram(addr, buf, len) (*board_read_from_sram_hook)(addr, buf, len)
 
 // IOREQ read only
 extern __bit (*board_ioreq_pin_hook)(void);
@@ -245,9 +227,12 @@ extern void (*board_set_wait_pin_hook)(uint8_t);
 #define R(port) PORT_CAT(R, port)
 #define PPS(port) PORT_CAT3(R, port, PPS)
 #define WPU(port) PORT_CAT(WPU, port)
+#define PORT(port) PORT_CAT(PORT, port)
 
+#define ADDR_L_PINS() PORT(Z80_ADDR_L)
 #define SET_ADDR_L_PINS(v) do { LAT(Z80_ADDR_L) = (v); } while(0)
 #define SET_ADDR_H_PINS(v) do { LAT(Z80_ADDR_H) = (v); } while(0)
+#define DATA_PINS()  PORT(Z80_DATA)
 #define SET_DATA_PINS(v) do { LAT(Z80_DATA) = (v); } while(0)
 #define SET_DATA_DIR_OUTPUT() do { TRIS(Z80_DATA) = 0x00; } while(0)
 #define SET_DATA_DIR_INPUT() do { TRIS(Z80_DATA) = 0xff; } while(0)

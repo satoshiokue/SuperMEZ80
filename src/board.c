@@ -26,6 +26,11 @@
 void (*board_sys_init_hook)(void) = NULL;
 void (*board_bus_master_hook)(int) = NULL;
 void (*board_start_z80_hook)(void) = NULL;
+void (*board_set_bank_pins_hook)(uint32_t) = NULL;
+void (*board_setup_addrbus_hook)(uint32_t) = NULL;
+uint16_t (*board_low_addr_mask_hook)(void) = NULL;
+void (*board_write_to_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len) = NULL;
+void (*board_read_from_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len) = NULL;
 
 __bit (*board_ioreq_pin_hook)(void) = NULL;
 __bit (*board_memrq_pin_hook)(void) = NULL;

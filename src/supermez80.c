@@ -45,7 +45,7 @@ debug_t debug = {
     0,  // disk_mask
 };
 
-// global variable which is handled by dma_acquire_addrbus() and _reelase()
+// global variable which is handled by board dependent stuff
 int turn_on_io_led = 0;
 
 const unsigned char rom[] = {
