@@ -24,6 +24,8 @@
     Written by Tetsuya Suzuki
 */
 
+#define BOARD_DEPENDENT_SOURCE
+
 #include <supermez80.h>
 #include <mcp23s08.h>
 #include "emuz80_common.h"

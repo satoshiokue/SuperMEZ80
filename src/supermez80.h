@@ -252,6 +252,8 @@ extern void (*board_set_wait_pin_hook)(uint8_t);
 #define SET_DATA_DIR_OUTPUT() do { TRIS(Z80_DATA) = 0x00; } while(0)
 #define SET_DATA_DIR_INPUT() do { TRIS(Z80_DATA) = 0xff; } while(0)
 
+#include "chk_borad_dpend.h"
+
 //
 // debug macros
 //

@@ -4,6 +4,9 @@
  * Based on main.c by Tetsuya Suzuki and emuz80_z80ram.c by Satoshi Okue
  * Modified by @hanyazou https://twitter.com/hanyazou
  */
+
+#define BOARD_DEPENDENT_SOURCE
+
 #include <supermez80.h>
 #include <stdio.h>
 #include <string.h>
