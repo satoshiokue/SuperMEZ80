@@ -152,10 +152,12 @@ static void supermez80_spi_sys_init()
     //
     // Initialize SD Card
     //
-    for (int retry = 0; 1; retry++) {
+    static int retry;  // I don't know why, but someone destroys automatic variables,
+                       // so I made them static variables to get around it.
+    for (retry = 0; 1; retry++) {
         if (20 <= retry) {
             printf("No SD Card?\n\r");
-            while(0);
+            while(1);
         }
         if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
             break;
