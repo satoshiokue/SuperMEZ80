@@ -44,8 +44,10 @@ static void acquire_bus(struct SPI *ctx_)
 {
     struct SPI_HW *ctx = (struct SPI_HW *)ctx_;
     if (ctx->bus_acquired == 0) {
-        PPS(SPI(CLK)) = 0x31;       // Set as CLK output
-        PPS(SPI(PICO)) = 0x32;      // Set as data output
+        PPS(SPI(CLK)) = PPS_OUT(SPIx(SCK));
+                                    // Set as CLK output
+        PPS(SPI(PICO)) = PPS_OUT(SPIx(SDO));
+                                    // Set as data output
         ctx->tris = TRIS(Z80_DATA); // save direction settings
         TRIS(SPI(PICO)) = 0;        // set PICO as output
         TRIS(SPI(CLK)) = 0;         // set clock as output
@@ -69,20 +71,19 @@ void SPI(begin)(struct SPI *ctx_)
     struct SPI_HW *ctx = (struct SPI_HW *)ctx_;
     ctx->bus_acquired = 0;
 
-    SPI1CON0 = 0;
-    SPI1CON1 = 0;
-
-    SPI1SCKPPS = PPS_IN(SPI(CLK));  // Assign CLK input pin (?)
-    SPI1SDIPPS = PPS_IN(SPI(POCI)); // Assign data input pin
+    SPIx(CON0) = 0;
+    SPIx(CON1) = 0;
+    SPIx(SCKPPS) = PPS_IN(SPI(CLK));    // Assign CLK input pin (?)
+    SPIx(SDIPPS) = PPS_IN(SPI(POCI));   // Assign data input pin
 #ifdef SPI_USE_MCP23S08
     if (mcp23s08_is_alive(MCP23S08_ctx)) {
         mcp23s08_write(MCP23S08_ctx, SPI(GPIO_SS), 1);  // Inactive
     } else
 #endif
     {
-    TRIS(SPI(SS)) = 0;      // Set as output
+    TRIS(SPI(SS)) = 0;                  // Set as output
     }
-    SPI1CON0bits.EN = 1;    // Enable SPI
+    SPIx(CON0bits).EN = 1;              // Enable SPI
 }
 
 void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bit_order, uint8_t data_mode)
@@ -90,37 +91,37 @@ void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bit_order, u
     struct SPI_HW *ctx = (struct SPI_HW *)ctx_;
     ctx->clock_delay = clock_delay;
 
-    SPI1CON0bits.MST = 1;      // Host mode
-    SPI1CON0bits.BMODE = 1;    // Byte transfer mode
-    SPI1TWIDTH = 0;            // 8 bit
-    SPI1INTE = 0;              // Interrupts are not used
-    SPI1CON1bits.FST = 0;      // Delay to first SCK will be at least 1⁄2 baud period
-    SPI1CON2bits.TXR = 1;      // Full duplex mode (TXR and RXR are both enabled)
-    SPI1CON2bits.RXR = 1;
+    SPIx(CON0bits).MST = 1;     // Host mode
+    SPIx(CON0bits).BMODE = 1;   // Byte transfer mode
+    SPIx(TWIDTH) = 0;           // 8 bit
+    SPIx(INTE) = 0;             // Interrupts are not used
+    SPIx(CON1bits).FST = 0;     // Delay to first SCK will be at least 1⁄2 baud period
+    SPIx(CON2bits).TXR = 1;     // Full duplex mode (TXR and RXR are both enabled)
+    SPIx(CON2bits).RXR = 1;
 
     if (bit_order == SPI_MSBFIRST)
-        SPI1CON0bits.LSBF = 0;
+        SPIx(CON0bits).LSBF = 0;
     else
-        SPI1CON0bits.LSBF = 1;
+        SPIx(CON0bits).LSBF = 1;
 
     if (data_mode == SPI_MODE0) {
-        SPI1CON1bits.SMP = 0;  // SDI input is sampled in the middle of data output time
-        SPI1CON1bits.CKE = 1;  // Output data changes on transition from Active to Idle clock state
-        SPI1CON1bits.CKP = 0;  // Idle state for SCK is low level
+        SPIx(CON1bits).SMP = 0; // SDI input is sampled in the middle of data output time
+        SPIx(CON1bits).CKE = 1; // Output data changes on transition from Active to Idle clock state
+        SPIx(CON1bits).CKP = 0; // Idle state for SCK is low level
     } else {
         printf("%s: ERROR: mode %d is not supported\n\r", __FILE__, data_mode);
         while (1);
     }
 
     if (clock_delay == 0) {
-        SPI1CLK = 0;   // FOSC (System Clock)
-        //SPI1BAUD = 3;  // 64 MHz / 2 * ( 3 + 1) = 8.0 MHz
-        //SPI1BAUD = 4;  // 64 MHz / 2 * ( 4 + 1) = 6.4 MHz
-        SPI1BAUD = 5;  // 64 MHz / 2 * ( 5 + 1) = 5.3 MHz
-        //SPI1BAUD = 7;  // 64 MHz / 2 * ( 5 + 1) = 4.0 MHz
+        SPIx(CLK) = 0;      // FOSC (System Clock)
+        //SPIx(BAUD) = 3;     // 64 MHz / 2 * ( 3 + 1) = 8.0 MHz
+        //SPIx(BAUD) = 4;     // 64 MHz / 2 * ( 4 + 1) = 6.4 MHz
+        SPIx(BAUD) = 5;     // 64 MHz / 2 * ( 5 + 1) = 5.3 MHz
+        //SPIx(BAUD) = 7;     // 64 MHz / 2 * ( 5 + 1) = 4.0 MHz
     } else {
-        SPI1CLK = 2;   // MFINTOSC (500 kHz)
-        SPI1BAUD = 2;  // 500 kHz / 2 * ( 2 + 1) = 83 kHz
+        SPIx(CLK) = 2;      // MFINTOSC (500 kHz)
+        SPIx(BAUD) = 2;     // 500 kHz / 2 * ( 2 + 1) = 83 kHz
     }
 }
 
@@ -138,11 +139,11 @@ void SPI(end_transaction)(struct SPI *ctx_)
 
 uint8_t SPI(transfer_byte)(struct SPI *ctx_, uint8_t output)
 {
-    SPI1TCNTH = 0;
-    SPI1TCNTL = 1;
-    SPI1TXB = output;
-    while(!PIR3bits.SPI1RXIF);
-    return SPI1RXB;
+    SPIx(TCNTH) = 0;
+    SPIx(TCNTL) = 1;
+    SPIx(TXB) = output;
+    while(!SPIx(RXIF));
+    return SPIx(RXB);
 }
 
 void SPI(transfer)(struct SPI *ctx_, void *buf, unsigned int count)
@@ -162,17 +163,17 @@ void SPI(send)(struct SPI *ctx_, const void *buf, unsigned int count)
     if (count == 0)
         return;
 
-    SPI1TCNTH = (count >> 8);
-    SPI1TCNTL = (count & 0xff);
+    SPIx(TCNTH) = (count >> 8);
+    SPIx(TCNTL) = (count & 0xff);
 
-    SPI1TXB = *p++;
+    SPIx(TXB) = *p++;
     for (int i = 1; i < count; i++) {
-        SPI1TXB = *p++;
-        while(!PIR3bits.SPI1RXIF);
-        dummy = SPI1RXB;
+        SPIx(TXB) = *p++;
+        while(!SPIx(RXIF));
+        dummy = SPIx(RXB);
     }
-    while(!PIR3bits.SPI1RXIF);
-    dummy = SPI1RXB;
+    while(!SPIx(RXIF));
+    dummy = SPIx(RXB);
 }
 
 void SPI(receive)(struct SPI *ctx_, void *buf, unsigned int count)
@@ -182,17 +183,17 @@ void SPI(receive)(struct SPI *ctx_, void *buf, unsigned int count)
     if (count == 0)
         return;
 
-    SPI1TCNTH = (count >> 8);
-    SPI1TCNTL = (count & 0xff);
+    SPIx(TCNTH) = (count >> 8);
+    SPIx(TCNTL) = (count & 0xff);
 
-    SPI1TXB = 0xff;
+    SPIx(TXB) = 0xff;
     for (int i = 1; i < count; i++) {
-        SPI1TXB = 0xff;
-        while(!PIR3bits.SPI1RXIF);
-        *p++ = SPI1RXB;
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
     }
-    while(!PIR3bits.SPI1RXIF);
-    *p++ = SPI1RXB;
+    while(!SPIx(RXIF));
+    *p++ = SPIx(RXB);
 }
 
 void SPI(dummy_clocks)(struct SPI *ctx_, unsigned int clocks)

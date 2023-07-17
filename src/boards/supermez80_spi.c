@@ -411,6 +411,7 @@ void supermez80_spi_init()
 }
 
 #define SPI_PREFIX SPI_SD
+#define SPI_HW_INST SPI1
 #define SPI_USE_MCP23S08
 #include <pic18f47q43_spi.c>
 #include <SDCard.c>

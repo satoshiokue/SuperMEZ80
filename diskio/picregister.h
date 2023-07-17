@@ -35,6 +35,9 @@
 #define WPU(port) PORT_CAT(WPU, port)
 #define PORT(port) PORT_CAT(PORT, port)
 #define PPS_IN(port) PORT_CAT(PPS_IN, port)
+#define PPS_OUT(port) PORT_CAT(PPS_OUT_, port)
+
+#define SPIx(reg) PORT_CAT(SPI_HW_INST, reg)
 
 #define PPS_INA 0
 #define PPS_INA0 ((PPS_INA << 3) | 0)
@@ -75,5 +78,72 @@
 #define PPS_IND5 ((PPS_IND << 3) | 5)
 #define PPS_IND6 ((PPS_IND << 3) | 6)
 #define PPS_IND7 ((PPS_IND << 3) | 7)
+
+// PPS output
+#define PPS_OUT_ADGRB       0x45
+#define PPS_OUT_ADGRA       0x44
+#define PPS_OUT_DSM1        0x43
+#define PPS_OUT_CLKR        0x42
+#define PPS_OUT_NCO3        0x41
+#define PPS_OUT_NCO2        0x40
+#define PPS_OUT_NCO1        0x3f
+
+#define PPS_OUT_TMR0        0x39
+#define PPS_OUT_I2C1SDA     0x38
+#define PPS_OUT_I2C1SCL     0x37
+#define PPS_OUT_SPI2SS      0x36
+#define PPS_OUT_SPI2SDO     0x35
+#define PPS_OUT_SPI2SCK     0x34
+#define PPS_OUT_SPI1SS      0x33
+#define PPS_OUT_SPI1SDO     0x32
+#define PPS_OUT_SPI1SCK     0x31
+#define PPS_OUT_C2OUT       0x30
+#define PPS_OUT_C1OUT       0x2f
+#define PPS_OUT_UART5RTS    0x2e
+#define PPS_OUT_UART5TXDE   0x2d
+#define PPS_OUT_UART5TX     0x2c
+#define PPS_OUT_UART4RTS    0x2b
+#define PPS_OUT_UART4TXDE   0x2a
+#define PPS_OUT_UART4TX     0x29
+#define PPS_OUT_UART3RTS    0x28
+#define PPS_OUT_UART3TXDE   0x27
+#define PPS_OUT_UART3TX     0x26
+#define PPS_OUT_UART2RTS    0x25
+#define PPS_OUT_UART2TXDE   0x24
+#define PPS_OUT_UART2TX     0x23
+#define PPS_OUT_UART1RTS    0x22
+#define PPS_OUT_UART1TXDE   0x21
+#define PPS_OUT_UART1TX     0x20
+
+#define PPS_OUT_PWM3S1P2    0x1d
+#define PPS_OUT_PWM3S1P1    0x1c
+#define PPS_OUT_PWM2S1P2    0x1b
+#define PPS_OUT_PWM2S1P1    0x1a
+#define PPS_OUT_PWM1S1P2    0x19
+#define PPS_OUT_PWM1S1P1    0x18
+#define PPS_OUT_CCP3        0x17
+#define PPS_OUT_CCP2        0x16
+#define PPS_OUT_CCP1        0x15
+#define PPS_OUT_CWG3D       0x14
+#define PPS_OUT_CWG3C       0x13
+#define PPS_OUT_CWG3B       0x12
+#define PPS_OUT_CWG3A       0x11
+#define PPS_OUT_CWG2D       0x10
+#define PPS_OUT_CWG2C       0x0f
+#define PPS_OUT_CWG2B       0x0e
+#define PPS_OUT_CWG2A       0x0d
+#define PPS_OUT_CWG1D       0x0c
+#define PPS_OUT_CWG1C       0x0b
+#define PPS_OUT_CWG1B       0x0a
+#define PPS_OUT_CWG1A       0x09
+#define PPS_OUT_CLC8        0x08
+#define PPS_OUT_CLC7        0x08
+#define PPS_OUT_CLC6        0x08
+#define PPS_OUT_CLC5        0x08
+#define PPS_OUT_CLC4        0x08
+#define PPS_OUT_CLC3        0x08
+#define PPS_OUT_CLC2        0x08
+#define PPS_OUT_CLC1        0x08
+#define PPS_OUT_LATxy       0x00
 
 #endif  // __PICREGISTER_H__
