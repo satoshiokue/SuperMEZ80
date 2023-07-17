@@ -108,23 +108,6 @@ static void supermez80_spi_sys_init()
     LAT(SPI_SS) = 1;            // deactive
     TRIS(SPI_SS) = 0;           // Set as output
 
-    // Z80 clock
-#ifdef Z80_CLK_HZ
-    PPS(Z80_CLK) = 0x3f;        // asign NCO1
-    TRIS(Z80_CLK) = 0;          // NCO output pin
-    NCO1INC = Z80_CLK_HZ * 2 / 61;
-    NCO1CLK = 0x00;             // Clock source Fosc
-    NCO1PFM = 0;                // FDC mode
-    NCO1OUT = 1;                // NCO output enable
-    NCO1EN = 1;                 // NCO enable
-#else
-    // Disable clock output for Z80 (Use external clock for Z80)
-    PPS(Z80_CLK) = 0;           // select LATxy
-    TRIS(Z80_CLK) = 1;          // set as input
-    NCO1OUT = 0;                // NCO output disable
-    NCO1EN = 0;                 // NCO disable
-#endif
-
     // /WE output pin
     LAT(SRAM_WE) = 1;
     TRIS(SRAM_WE) = 0;          // Set as output
@@ -313,19 +296,6 @@ static void supermez80_spi_start_z80(void)
     CLCDATA = 0x0;       // Clear all CLC outs
     CLC3IF = 0;          // Clear the CLC interrupt flag
     CLC3IE = 0;          // NOTE: CLC3 interrupt is not enabled. This will be handled by polling.
-
-    // Unlock IVT
-    IVTLOCK = 0x55;
-    IVTLOCK = 0xAA;
-    IVTLOCKbits.IVTLOCKED = 0x00;
-
-    // Default IVT base address
-    IVTBASE = 0x000008;
-
-    // Lock IVT
-    IVTLOCK = 0x55;
-    IVTLOCK = 0xAA;
-    IVTLOCKbits.IVTLOCKED = 0x01;
 
     // Z80 start
     LAT(Z80_BUSRQ) = 1;  // /BUSREQ=1

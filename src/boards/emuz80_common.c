@@ -42,6 +42,10 @@ static void emuz80_common_sys_init()
     ANSELE1 = 0;
     ANSELE2 = 0;
 
+    // RESET (RE1) output pin
+    LAT(Z80_RESET) = 0;         // Reset
+    TRIS(Z80_RESET) = 0;        // Set as output
+
     // UART3 initialize
     U3BRG = 416;        // 9600bps @ 64MHz
     U3RXEN = 1;         // Receiver enable
@@ -58,10 +62,6 @@ static void emuz80_common_sys_init()
 
     U3ON = 1;           // Serial port enable
 
-    // RESET (RE1) output pin
-    LAT(Z80_RESET) = 0;         // Reset
-    TRIS(Z80_RESET) = 0;        // Set as output
-
     // /BUSREQ (RE0) output pin
     LAT(Z80_BUSRQ) = 0;         // BUS request
     TRIS(Z80_BUSRQ) = 0;        // Set as output
@@ -73,6 +73,23 @@ static void emuz80_common_sys_init()
     // Data bus D7-D0 pin
     LAT(Z80_DATA) = 0x00;
     TRIS(Z80_DATA) = 0x00;      // Set as output
+
+    // Z80 clock
+#ifdef Z80_CLK_HZ
+    PPS(Z80_CLK) = 0x3f;        // asign NCO1
+    TRIS(Z80_CLK) = 0;          // NCO output pin
+    NCO1INC = Z80_CLK_HZ * 2 / 61;
+    NCO1CLK = 0x00;             // Clock source Fosc
+    NCO1PFM = 0;                // FDC mode
+    NCO1OUT = 1;                // NCO output enable
+    NCO1EN = 1;                 // NCO enable
+#else
+    // Disable clock output for Z80 (Use external clock for Z80)
+    PPS(Z80_CLK) = 0;           // select LATxy
+    TRIS(Z80_CLK) = 1;          // set as input
+    NCO1OUT = 0;                // NCO output disable
+    NCO1EN = 0;                 // NCO disable
+#endif
 }
 
 static void emuz80_common_start_z80(void)
@@ -124,6 +141,19 @@ static void emuz80_common_start_z80(void)
     // /WAIT (RD7) output pin
     LAT(Z80_WAIT) = 1;          // WAIT
     TRIS(Z80_WAIT) = 0;         // Set as output
+
+    // Unlock IVT
+    IVTLOCK = 0x55;
+    IVTLOCK = 0xAA;
+    IVTLOCKbits.IVTLOCKED = 0x00;
+
+    // Default IVT base address
+    IVTBASE = 0x000008;
+
+    // Lock IVT
+    IVTLOCK = 0x55;
+    IVTLOCK = 0xAA;
+    IVTLOCKbits.IVTLOCKED = 0x01;
 }
 
 void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
