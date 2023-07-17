@@ -163,6 +163,10 @@ static void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned in
     union address_bus_u ab;
     unsigned int i;
 
+    #ifdef SRAM_CE
+    LAT(SRAM_CE) = 0;
+    #endif
+
     ab.w = addr;
     #ifdef Z80_ADDR_H
     LAT(Z80_ADDR_H) = ab.h;
@@ -180,12 +184,20 @@ static void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned in
             #endif
         }
     }
+
+    #ifdef SRAM_CE
+    LAT(SRAM_CE) = 1;
+    #endif
 }
 
 static void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned int len)
 {
     union address_bus_u ab;
     unsigned int i;
+
+    #ifdef SRAM_CE
+    LAT(SRAM_CE) = 0;
+    #endif
 
     ab.w = addr;
     #ifdef Z80_ADDR_H
@@ -204,6 +216,10 @@ static void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned i
             #endif
         }
     }
+
+    #ifdef SRAM_CE
+    LAT(SRAM_CE) = 1;
+    #endif
 }
 
 static uint8_t emuz80_common_addr_l_pins(void) { return PORT(Z80_ADDR_L); }
