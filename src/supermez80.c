@@ -95,11 +95,10 @@ void main(void)
 
     U3RXIE = 1;          // Receiver interrupt enable
     GIE = 1;             // Global interrupt enable
-    CLC3IE = 0;          // NOTE: CLC3 interrupt is not enabled. This will be handled by polling.
 
     while(1) {
-         // Wait for IO access
-        while (!CLC3IF && !invoke_monitor);
+        // Wait for IO access
+        board_wait_io_event();
         io_handle();
     }
 }

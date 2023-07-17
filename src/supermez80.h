@@ -188,6 +188,12 @@ extern void (*board_write_to_sram_hook)(uint16_t addr, uint8_t *buf, unsigned in
 #define board_write_to_sram(addr, buf, len) (*board_write_to_sram_hook)(addr, buf, len)
 extern void (*board_read_from_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len);
 #define board_read_from_sram(addr, buf, len) (*board_read_from_sram_hook)(addr, buf, len)
+extern __bit (*board_io_event_hook)(void);
+#define board_io_event() (*board_io_event_hook)()
+extern void (*board_wait_io_event_hook)(void);
+#define board_wait_io_event() (*board_wait_io_event_hook)()
+extern void (*board_clear_io_event_hook)(void);
+#define board_clear_io_event() (*board_clear_io_event_hook)()
 
 // Address read and write
 extern uint8_t (*board_addr_l_pins_hook)(void);

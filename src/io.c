@@ -252,7 +252,7 @@ void try_to_invoke_monitor(void) {
         printf("\n\rAttempts to become a bassmaster ...\n\r");
         #endif
 
-        if (CLC3IF) {           // Check /IORQ
+        if (board_io_event()) { // Check /IORQ
             #ifdef CPM_MON_DEBUG
             printf("/IORQ is active\n\r");
             #endif
@@ -262,7 +262,7 @@ void try_to_invoke_monitor(void) {
 
         set_busrq_pin(0);       // set /BUSREQ to active
         __delay_us(20);         // Wait a while for Z80 to release the bus
-        if (CLC3IF) {           // Check /IORQ again
+        if (board_io_event()) { // Check /IORQ again
             // Withdraw /BUSREQ and let I/O handler to handle the break key if /IORQ is detected
             set_busrq_pin(1);
             #ifdef CPM_MON_DEBUG
@@ -291,7 +291,7 @@ void io_handle() {
 
     try_to_invoke_monitor();
 
-    if (!CLC3IF)                // Nothing to do and just return if no IO access is occurring
+    if (!board_io_event())        // Nothing to do and just return if no IO access is occurring
         return;
 
     int do_bus_master = 0;
@@ -607,6 +607,6 @@ void io_handle() {
     bus_master(0);
 
  withdraw_busreq:
-    CLC3IF = 0;             // Clear interrupt flag
+    board_clear_io_event(); // Clear interrupt flag
     set_busrq_pin(1);       // /BUSREQ is deactive
 }

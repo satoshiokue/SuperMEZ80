@@ -31,6 +31,9 @@ void (*board_setup_addrbus_hook)(uint32_t) = NULL;
 uint16_t (*board_low_addr_mask_hook)(void) = NULL;
 void (*board_write_to_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len) = NULL;
 void (*board_read_from_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len) = NULL;
+__bit (*board_io_event_hook)(void) = NULL;
+void (*board_wait_io_event_hook)(void) = NULL;
+void (*board_clear_io_event_hook)(void) = NULL;
 
 uint8_t (*board_addr_l_pins_hook)(void) = NULL;
 void (*board_set_addr_l_pins_hook)(uint8_t) = NULL;

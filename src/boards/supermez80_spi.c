@@ -312,6 +312,7 @@ static void supermez80_spi_start_z80(void)
 
     CLCDATA = 0x0;       // Clear all CLC outs
     CLC3IF = 0;          // Clear the CLC interrupt flag
+    CLC3IE = 0;          // NOTE: CLC3 interrupt is not enabled. This will be handled by polling.
 
     // Unlock IVT
     IVTLOCK = 0x55;
@@ -404,6 +405,21 @@ static uint16_t supermez80_spi_low_addr_mask(void)
     return LOW_ADDR_MASK;
 }
 
+static __bit supermez80_spi_io_event(void)
+{
+    return CLC3IF;
+}
+
+static void supermez80_spi_wait_io_event(void)
+{
+    while (!CLC3IF && !invoke_monitor);
+}
+
+static void supermez80_spi_clear_io_event(void)
+{
+    CLC3IF = 0;
+}
+
 void supermez80_spi_init()
 {
     emuz80_common_init();
@@ -414,6 +430,9 @@ void supermez80_spi_init()
     board_set_bank_pins_hook = supermez80_spi_set_bank_pins;
     board_setup_addrbus_hook = supermez80_spi_setup_addrbus;
     board_low_addr_mask_hook = supermez80_spi_low_addr_mask;
+    board_io_event_hook = supermez80_spi_io_event;
+    board_wait_io_event_hook = supermez80_spi_wait_io_event;
+    board_clear_io_event_hook = supermez80_spi_clear_io_event;
 
     board_set_nmi_pin_hook   = supermez80_spi_set_nmi_pin;
     board_set_wait_pin_hook  = supermez80_spi_set_wait_pin;
