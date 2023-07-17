@@ -95,8 +95,10 @@ static void emuz80_common_sys_init()
 static void emuz80_common_start_z80(void)
 {
     // Address bus A15-A8 pin (A14:/RFSH, A15:/WAIT)
+    #ifdef Z80_ADDR_H
     WPU(Z80_ADDR_H) = 0xff;     // Week pull up
     TRIS(Z80_ADDR_H) = 0xff;    // Set as input
+    #endif
 
     // Address bus A7-A0 pin
     WPU(Z80_ADDR_L) = 0xff;     // Week pull up
@@ -156,13 +158,15 @@ static void emuz80_common_start_z80(void)
     IVTLOCKbits.IVTLOCKED = 0x01;
 }
 
-void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
+static void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
 {
     union address_bus_u ab;
     unsigned int i;
 
     ab.w = addr;
+    #ifdef Z80_ADDR_H
     LAT(Z80_ADDR_H) = ab.h;
+    #endif
     LAT(Z80_ADDR_L) = ab.l;
     for(i = 0; i < len; i++) {
         LAT(SRAM_WE) = 0;      // activate /WE
@@ -171,18 +175,22 @@ void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
         LAT(Z80_ADDR_L) = ++ab.l;
         if (ab.l == 0) {
             ab.h++;
+            #ifdef Z80_ADDR_H
             LAT(Z80_ADDR_H) = ab.h;
+            #endif
         }
     }
 }
 
-void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned int len)
+static void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned int len)
 {
     union address_bus_u ab;
     unsigned int i;
 
     ab.w = addr;
+    #ifdef Z80_ADDR_H
     LAT(Z80_ADDR_H) = ab.h;
+    #endif
     LAT(Z80_ADDR_L) = ab.l;
     for(i = 0; i < len; i++) {
         LAT(SRAM_OE) = 0;      // activate /OE
@@ -191,7 +199,9 @@ void emuz80_common_read_from_sram(uint16_t addr, uint8_t *buf, unsigned int len)
         LAT(Z80_ADDR_L) = ++ab.l;
         if (ab.l == 0) {
             ab.h++;
+            #ifdef Z80_ADDR_H
             LAT(Z80_ADDR_H) = ab.h;
+            #endif
         }
     }
 }
