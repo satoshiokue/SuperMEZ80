@@ -48,10 +48,3 @@ void (*board_set_reset_pin_hook)(uint8_t) = NULL;
 void (*board_set_nmi_pin_hook)(uint8_t) = NULL;
 void (*board_set_int_pin_hook)(uint8_t) = NULL;
 void (*board_set_wait_pin_hook)(uint8_t) = NULL;
-
-extern void supermez80_spi_init(void);
-
-void board_init()
-{
-    supermez80_spi_init();
-}

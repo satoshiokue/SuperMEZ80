@@ -392,7 +392,7 @@ static void supermez80_spi_clear_io_event(void)
     CLC3IF = 0;
 }
 
-void supermez80_spi_init()
+void board_init()
 {
     emuz80_common_init();
 
