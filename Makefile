@@ -1,5 +1,6 @@
 PROGPORT := /dev/tty.usbmodem1444301
 CONSPORT := /dev/cu.usbserial-144440
+BOARD := SUPERMEZ80_SPI
 PIC := 18F47Q43
 XC8 := /Applications/microchip/xc8/v2.40/bin/xc8
 XC8_OPTS := --chip=$(PIC) --std=c99
@@ -20,10 +21,15 @@ FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := \
     $(DISKIO_DIR)/diskio.c $(DISKIO_DIR)/utils.c
 SRCS := $(SRC_DIR)/supermez80.c $(SRC_DIR)/disas.c $(SRC_DIR)/disas_z80.c $(SRC_DIR)/memory.c \
-    $(SRC_DIR)/monitor.c $(SRC_DIR)/io.c \
-    $(SRC_DIR)/boards/supermez80_spi.c \
-    $(SRC_DIR)/boards/supermez80_spi_ioexp.c \
-    $(SRC_DIR)/board.c
+    $(SRC_DIR)/monitor.c $(SRC_DIR)/io.c $(SRC_DIR)/board.c
+
+ifeq ($(BOARD),SUPERMEZ80_SPI)
+SRCS += $(SRC_DIR)/boards/supermez80_spi.c
+SRCS += $(SRC_DIR)/boards/supermez80_spi_ioexp.c
+endif
+ifeq ($(BOARD),SUPERMEZ80_CPM)
+SRCS += $(SRC_DIR)/boards/supermez80_cpm.c
+endif
 
 INCS :=-I$(SRC_DIR) -I$(DISKIO_DIR) -I$(FATFS_DIR)/source -I$(BUILD_DIR)
 
