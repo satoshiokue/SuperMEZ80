@@ -42,7 +42,7 @@ static void emuz80_common_sys_init()
     ANSELE1 = 0;
     ANSELE2 = 0;
 
-    // RESET (RE1) output pin
+    // RESET output pin
     LAT(Z80_RESET) = 0;         // Reset
     TRIS(Z80_RESET) = 0;        // Set as output
 
@@ -62,9 +62,14 @@ static void emuz80_common_sys_init()
 
     U3ON = 1;           // Serial port enable
 
-    // /BUSREQ (RE0) output pin
+    // /BUSREQ output pin
     LAT(Z80_BUSRQ) = 0;         // BUS request
     TRIS(Z80_BUSRQ) = 0;        // Set as output
+
+    #ifdef Z80_NMI
+    LAT(Z80_NMI) = 1;           // deactivate NMI
+    TRIS(Z80_NMI) = 0;          // Set as output
+    #endif
 
     // Address bus A7-A0 pin
     LAT(Z80_ADDR_L) = 0x00;
