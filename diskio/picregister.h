@@ -137,13 +137,13 @@
 #define PPS_OUT_CWG1B       0x0a
 #define PPS_OUT_CWG1A       0x09
 #define PPS_OUT_CLC8        0x08
-#define PPS_OUT_CLC7        0x08
-#define PPS_OUT_CLC6        0x08
-#define PPS_OUT_CLC5        0x08
-#define PPS_OUT_CLC4        0x08
-#define PPS_OUT_CLC3        0x08
-#define PPS_OUT_CLC2        0x08
-#define PPS_OUT_CLC1        0x08
+#define PPS_OUT_CLC7        0x07
+#define PPS_OUT_CLC6        0x06
+#define PPS_OUT_CLC5        0x05
+#define PPS_OUT_CLC4        0x04
+#define PPS_OUT_CLC3        0x03
+#define PPS_OUT_CLC2        0x02
+#define PPS_OUT_CLC1        0x01
 #define PPS_OUT_LATxy       0x00
 
 #endif  // __PICREGISTER_H__
