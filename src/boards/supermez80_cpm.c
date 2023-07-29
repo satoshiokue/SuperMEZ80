@@ -66,6 +66,11 @@
 
 #include "emuz80_common.c"
 
+#ifdef SUPERMEZ80_CPM_MMU
+static const int CLC_IN_HIGH = CLC_IN_PWM2S1P1_OUT;
+static const int CLC_IN_LOW = CLC_IN_PWM2S1P2_OUT;
+#endif
+
 static void supermez80_cpm_sys_init()
 {
     emuz80_common_sys_init();
@@ -83,24 +88,93 @@ static void supermez80_cpm_sys_init()
     // /WE output pin
     LAT(SRAM_WE) = 1;
     TRIS(SRAM_WE) = 0;          // Set as output
-    PPS(SRAM_WE) = 0x00;        // unbind with CLC
 
     // /OE output pin
     LAT(SRAM_OE) = 1;
     TRIS(SRAM_OE) = 0;          // Set as output
-    PPS(SRAM_OE) = 0x00;        // unbind with CLC
 
-    LAT(Z80_A14) = 0;
-    TRIS(Z80_A14) = 0;
-
-    LAT(Z80_A15) = 0;
-    TRIS(Z80_A15) = 0;
-
+    // MMU bank select
     LAT(BANK0) = 0;
     TRIS(BANK0) = 0;
 
     LAT(BANK1) = 0;
     TRIS(BANK1) = 0;
+
+    PPS(Z80_WAIT) = 0x00;       // unbind with CLC
+    PPS(BANK0) = 0x00;          // unbind with CLC
+    PPS(BANK1) = 0x00;          // unbind with CLC
+
+#ifdef SUPERMEZ80_CPM_MMU
+    // CLC input pin assign
+    CLCIN0PPS = PPS_IN(Z80_IOREQ);  // Port A or C can be specified
+    CLCIN1PPS = PPS_IN(Z80_MEMRQ);  // Port A or C can be specified
+    CLCIN2PPS = PPS_IN(Z80_A14);    // Port B or D can be specified
+    CLCIN3PPS = PPS_IN(Z80_A15);    // Port B or D can be specified
+
+    // setup PWM1 for fixed HIGH and LOW input
+    // PWM2S1P1: high
+    // PWM2S1P2: low
+    PWM2GIE = 0;                    // Interrupt is not enabled
+    PWM2CON = 0;                    // Disabled so that outpus goto their default stastes
+    PWM2S1CFG = 0x40;               // P1 out is low true and P2 out is high true
+
+    //
+    // CLC3: A14, A15 and bank selection 0 -> BANK0
+    //
+    CLCSELECT = 2;                  // Select CLC3
+    CLCnCON = 0x00;                 // Disable CLC
+
+    // input data selection
+    CLCnSEL0 = 2;                   // A14 is connected to input 0
+    CLCnSEL1 = 3;                   // A15 is connected to input 1
+    CLCnSEL2 = CLC_IN_LOW;          // Bank selection 0
+    CLCnSEL3 = CLC_IN_HIGH;         // Fixed
+
+    // data gating
+    CLCnGLS0 = 0x02;                // Input 0 is gated into g1
+    CLCnGLS1 = 0x08;                // Input 1 is gated into g2
+    CLCnGLS2 = 0x20;                // Input 2 is gated into g3
+    CLCnGLS3 = 0x80;                // Input 3 is gated into g4
+
+    // select gate output polarities
+    CLCnPOL = 0x00;                 // CLC output is not inverted
+    CLCnCON = 0x80;                 // Enable, AND-OR, inturrupt disabled
+
+    CLCDATA = 0x0;                  // Clear all CLC outs
+    CLC3IF = 0;                     // Clear the CLC interrupt flag
+    CLC3IE = 0;                     // Interrupt is not enabled
+
+    PPS(BANK0) = PPS_OUT_CLC3;      // CLC3 -> BANK0
+
+    //
+    // CLC4: A14, A15 and bank selection 1 -> BANK1
+    //
+    CLCSELECT = 3;                  // Select CLC4
+    CLCnCON = 0x00;                 // Disable CLC
+
+    // input data selection
+    CLCnSEL0 = 2;                   // A14 is connected to input 0
+    CLCnSEL1 = 3;                   // A15 is connected to input 1
+    CLCnSEL2 = CLC_IN_LOW;          // Bank selection 1
+    CLCnSEL3 = CLC_IN_HIGH;         // Fixed
+
+    // data gating
+    CLCnGLS0 = 0x02;                // Input 0 is gated into g1
+    CLCnGLS1 = 0x08;                // Input 1 is gated into g2
+    CLCnGLS2 = 0x10;                // Input 2 is inverted and gated into g3
+                                    // invert BANK1 to activate CE2 of TC551001
+    CLCnGLS3 = 0x80;                // Input 3 is gated into g4
+
+    // select gate output polarities
+    CLCnPOL = 0x00;                 // CLC output is not inverted
+    CLCnCON = 0x80;                 // Enable, AND-OR, inturrupt disabled
+
+    CLCDATA = 0x0;                  // Clear all CLC outs
+    CLC3IF = 0;                     // Clear the CLC interrupt flag
+    CLC3IE = 0;                     // Interrupt is not enabled
+
+    PPS(BANK1) = PPS_OUT_CLC4;      // CLC4 -> BANK1
+#endif  // SUPERMEZ80_CPM_MMU
 
     emuz80_common_wait_for_programmer();
 
@@ -160,12 +234,6 @@ static void supermez80_cpm_start_z80(void)
 {
     emuz80_common_start_z80();
 
-    // CLC input pin assign
-    CLCIN0PPS = PPS_IN(Z80_IOREQ);	// Port A or C can be specified
-    CLCIN1PPS = PPS_IN(Z80_MEMRQ);  // Port A or C can be specified
-    CLCIN2PPS = PPS_IN(Z80_A14);    // Port B or D can be specified
-    CLCIN3PPS = PPS_IN(Z80_A15);    // Port B or D can be specified
-
     //
     // CLC1: /IOREQ -> /WAIT
     //
@@ -192,7 +260,7 @@ static void supermez80_cpm_start_z80(void)
     CLC1IF = 0;                     // Clear the CLC interrupt flag
     CLC1IE = 0;                     // Interrupt is not enabled. This will be handled by polling.
 
-    PPS(Z80_WAIT) = 0x01;           // CLC1 -> /WAIT
+    PPS(Z80_WAIT) = PPS_OUT_CLC1;   // CLC1 -> /WAIT
 
     // Z80 start
     LAT(Z80_BUSRQ) = 1;  // /BUSREQ=1
@@ -212,14 +280,29 @@ static void supermez80_cpm_set_wait_pin(uint8_t v)
 
 static void supermez80_cpm_set_bank_pins(uint32_t addr)
 {
+#ifdef SUPERMEZ80_CPM_MMU
+    // CLC3: A14, A15 and bank selection 0 -> BANK0
+    CLCSELECT = 2;                  // Select CLC3
+    CLCnCON = 0x00;                 // Disable CLC
+    CLCnSEL2 = ((addr >> 16) & 1) ? CLC_IN_HIGH : CLC_IN_LOW;
+    CLCnCON = 0x80;                 // Enable CLC
+
+    // CLC4: A14, A15 and bank selection 1 -> BANK1
+    CLCSELECT = 3;                  // Select CLC4
+    CLCnCON = 0x00;                 // Disable CLC
+    CLCnSEL2 = ((addr >> 17) & 1) ? CLC_IN_HIGH : CLC_IN_LOW;
+    CLCnCON = 0x80;                 // Enable CLC
+
+    CLCSELECT = 0;                  // Without this, it does not work at all. Why?
+#else  // SUPERMEZ80_CPM_MMU
     LAT(BANK0) = (addr >> 16) & 1;
     LAT(BANK1) = ~((addr >> 17) & 1);  // invert A17 to activate CE2 of TC551001
+#endif  // SUPERMEZ80_CPM_MMU
 }
 
 static void supermez80_cpm_setup_addrbus(uint32_t addr)
 {
-    LAT(Z80_A14) = 0;
-    LAT(Z80_A15) = 0;
+    set_bank_pins(addr);
 }
 
 static uint16_t supermez80_cpm_low_addr_mask(void)
