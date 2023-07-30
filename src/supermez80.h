@@ -24,6 +24,9 @@
 //#define CPM_MON_DEBUG
 
 // Z80 clock frequency (select one or use external clock)
+//#define Z80_CLK_HZ 499712UL         //  0.5 MHz (NCOxINC = 0x04000, 64MHz/64/2)
+//#define Z80_CLK_HZ 999424UL         //  1.0 MHz (NCOxINC = 0x08000, 64MHz/32/2)
+//#define Z80_CLK_HZ 1998848UL        //  2.0 MHz (NCOxINC = 0x10000, 64MHz/16/2)
 //#define Z80_CLK_HZ 3997696UL        //  4.0 MHz (NCOxINC = 0x20000, 64MHz/8/2)
 //#define Z80_CLK_HZ 4568778UL        //  4.6 MHz (NCOxINC = 0x24924, 64MHz/7/2)
 //#define Z80_CLK_HZ 5330241UL        //  5.3 MHz (NCOxINC = 0x2AAAA, 64MHz/6/2)
