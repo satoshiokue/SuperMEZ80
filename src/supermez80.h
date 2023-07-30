@@ -130,6 +130,18 @@ extern int turn_on_io_led;
 void bus_master(int enable);
 
 // io
+enum {
+    IO_STAT_INVALID       = 0,
+    IO_STAT_NOT_STARTED   = 10,
+    IO_STAT_RUNNING       = 20,
+    IO_STAT_READ_WAITING  = 30,
+    IO_STAT_WRITE_WAITING = 40,
+    IO_STAT_STOPPED       = 50,
+    IO_STAT_RESUMING      = 60,
+    IO_STAT_INTERRUPTED   = 70,
+};
+extern void io_init(void);
+extern int io_stat(void);
 extern int getch(void);
 extern char getch_buffered(void);
 extern void ungetch(char c);

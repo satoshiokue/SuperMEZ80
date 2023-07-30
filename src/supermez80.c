@@ -69,6 +69,7 @@ void main(void)
     sys_init();
     if (disk_init() < 0)
         while (1);
+    io_init();
     mem_init();
     mon_init();
 

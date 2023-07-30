@@ -49,6 +49,7 @@ drive_t drives[] = {
 };
 const int num_drives = (sizeof(drives)/sizeof(*drives));
 unsigned int io_output_chars = 0;
+static int io_stat_ = IO_STAT_INVALID;
 
 // hardware control
 static uint8_t hw_ctrl_lock = HW_CTRL_LOCKED;
@@ -62,6 +63,14 @@ static unsigned int con_output = 0;
 static unsigned int con_output_buffer_head = 0;
 
 static uint8_t disk_buf[SECTOR_SIZE];
+
+void io_init(void) {
+    io_stat_ = IO_STAT_NOT_STARTED;
+}
+
+int io_stat(void) {
+    return io_stat_;
+}
 
 // UART3 Transmit
 void putch(char c) {
@@ -299,8 +308,11 @@ void io_handle() {
     uint8_t io_data = data_pins();
 
     if (rd_pin()) {
+        io_stat_ = IO_STAT_WRITE_WAITING;
         goto io_write;
     }
+
+    io_stat_ = IO_STAT_READ_WAITING;
 
     // Z80 IO read cycle
     set_data_dir(0x00);           // Set as output
@@ -442,6 +454,8 @@ void io_handle() {
     set_wait_pin(1);            // Release wait
     while(!ioreq_pin());        // wait for /IORQ to be cleared
 
+    io_stat_ = IO_STAT_STOPPED;
+
     if (!do_bus_master && !invoke_monitor) {
         goto withdraw_busreq;
     }
@@ -466,15 +480,19 @@ void io_handle() {
     case MON_NMI_PREP:
     case MON_RST08_PREP:
         mon_prepare(io_addr == MON_NMI_PREP /* NMI or not*/);
+        io_stat_ = IO_STAT_INTERRUPTED;
         goto exit_bus_master;
     case MON_NMI_ENTER:
     case MON_RST08_ENTER:
+        io_stat_ = IO_STAT_INTERRUPTED;
         mon_enter(io_addr == MON_NMI_ENTER /* NMI or not*/);
         while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
         goto exit_bus_master;
     case MON_CLEANUP:
+        io_stat_ = IO_STAT_INTERRUPTED;
         mon_cleanup();
+        io_stat_ = IO_STAT_STOPPED;
         goto exit_bus_master;
     }
 
@@ -604,9 +622,12 @@ void io_handle() {
         mon_setup();
     }
 
+    io_stat_ = IO_STAT_RESUMING;
     bus_master(0);
 
  withdraw_busreq:
     board_clear_io_event(); // Clear interrupt flag
     set_busrq_pin(1);       // /BUSREQ is deactive
+
+    io_stat_ = IO_STAT_RUNNING;
 }
