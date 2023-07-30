@@ -32,46 +32,42 @@
 #include <SDCard.h>
 #include <fatdisk_debug.h>
 
-static const unsigned char nmimon[] = {
-// NMI entry at 0x0066
-#include "nmimon.inc"
+static const unsigned char trampoline[] = {
+// trampoline code at zero page
+#include "trampoline.inc"
 };
+
+#define ZERO_PAGE 0x0000
+#define ZERO_PAGE_SIZE 256
 #define NMI_VECTOR 0x0066
 #define NMI_VECTOR_SIZE 3
-#define NMI_HOOK (NMI_VECTOR + NMI_VECTOR_SIZE)
-#define NMI_HOOK_SIZE (sizeof(nmimon) - NMI_HOOK)
-static const unsigned char *nmi_vector = &nmimon[NMI_VECTOR];
-static const unsigned char *nmi_hook = &nmimon[NMI_HOOK];
-static const uint16_t nmi_hook_stack = sizeof(nmimon);
-static unsigned char nmi_hook_saved[NMI_HOOK_SIZE];
-static int nmi_hook_installed = MMU_INVALID_BANK;
-
-static const unsigned char rstmon[] = {
-// break point interrupt entry at 0x0008
-#include "rstmon.inc"
-};
 #define RST_VECTOR 0x0008
-#define RST_VECTOR_SIZE 3
-#define RST_HOOK (RST_VECTOR + RST_VECTOR_SIZE)
-#define RST_HOOK_SIZE (sizeof(rstmon) - RST_HOOK)
-static const unsigned char *rst_vector = &rstmon[RST_VECTOR];
-static const unsigned char *rst_hook = &rstmon[RST_HOOK];
-static const uint16_t rst_hook_stack = sizeof(rstmon);
-static unsigned char rst_hook_saved[RST_HOOK_SIZE];
-static int rst_hook_installed = MMU_INVALID_BANK;
+#define RST_VECTOR_SIZE 6
+
+// this structure must equals to work area in the trampoline code. see trampoline.z80
+struct trampoline_work_s {
+    uint16_t iy;
+    uint16_t ix;
+    uint16_t hl;
+    uint16_t de;
+    uint16_t bc;
+    uint16_t af;
+    uint16_t fake_ret_addr;
+    uint16_t pc;
+    uint16_t sp;
+    uint8_t nmi;
+    uint8_t rfu;
+};
+
+static const uint16_t trampoline_work =
+    sizeof(trampoline) - sizeof(struct trampoline_work_s);
+static unsigned char zero_page_saved[ZERO_PAGE_SIZE];
+static int trampoline_installed = MMU_INVALID_BANK;
 
 // Saved Z80 Context
 struct z80_context_s {
-    uint16_t pc;
-    uint16_t sp;
-    uint16_t af;
-    uint16_t bc;
-    uint16_t de;
-    uint16_t hl;
-    uint16_t ix;
-    uint16_t iy;
+    struct trampoline_work_s w;
     uint8_t saved_prog[2];
-    int nmi;
 };
 
 int invoke_monitor = 0;
@@ -100,70 +96,56 @@ void write_mcu_mem_w(void *addr, uint16_t val)
 
 void mon_show_registers(void)
 {
-    printf("PC: %04X  ", z80_context.pc);
-    printf("SP: %04X  ", z80_context.sp);
-    printf("AF: %04X  ", z80_context.af);
-    printf("BC: %04X  ", z80_context.bc);
-    printf("DE: %04X  ", z80_context.de);
-    printf("HL: %04X  ", z80_context.hl);
-    printf("IX: %04X  ", z80_context.ix);
-    printf("IY: %04X\n\r", z80_context.iy);
+    printf("PC: %04X  ", z80_context.w.pc);
+    printf("SP: %04X  ", z80_context.w.sp);
+    printf("AF: %04X  ", z80_context.w.af);
+    printf("BC: %04X  ", z80_context.w.bc);
+    printf("DE: %04X  ", z80_context.w.de);
+    printf("HL: %04X  ", z80_context.w.hl);
+    printf("IX: %04X  ", z80_context.w.ix);
+    printf("IY: %04X\n\r", z80_context.w.iy);
     printf("MMU: bank %02X  ", mmu_bank);
     printf("STATUS: %c%c%c%c%c%c%c%c",
-           (z80_context.af & 0x80) ? 'S' : '-',
-           (z80_context.af & 0x40) ? 'Z' : '-',
-           (z80_context.af & 0x20) ? 'X' : '-',
-           (z80_context.af & 0x10) ? 'H' : '-',
-           (z80_context.af & 0x08) ? 'X' : '-',
-           (z80_context.af & 0x04) ? 'P' : '-',
-           (z80_context.af & 0x02) ? 'N' : '-',
-           (z80_context.af & 0x01) ? 'C' : '-');
+           (z80_context.w.af & 0x80) ? 'S' : '-',
+           (z80_context.w.af & 0x40) ? 'Z' : '-',
+           (z80_context.w.af & 0x20) ? 'X' : '-',
+           (z80_context.w.af & 0x10) ? 'H' : '-',
+           (z80_context.w.af & 0x08) ? 'X' : '-',
+           (z80_context.w.af & 0x04) ? 'P' : '-',
+           (z80_context.w.af & 0x02) ? 'N' : '-',
+           (z80_context.w.af & 0x01) ? 'C' : '-');
     printf("\n\r");
 }
 
-static void uninstall_nmi_hook(void)
+static void uninstall_trampoline(void)
 {
-    if (nmi_hook_installed == MMU_INVALID_BANK)
+    if (trampoline_installed == MMU_INVALID_BANK)
         return;
-    dma_write_to_sram(bank_phys_addr(nmi_hook_installed, NMI_HOOK), nmi_hook_saved, NMI_HOOK_SIZE);
-    nmi_hook_installed = MMU_INVALID_BANK;
+    dma_write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), zero_page_saved,
+                      ZERO_PAGE_SIZE);
+    trampoline_installed = MMU_INVALID_BANK;
 }
 
-static void install_nmi_hook(int bank)
+static void install_trampoline(int bank)
 {
-    if (nmi_hook_installed != MMU_INVALID_BANK) {
-        uninstall_nmi_hook();
+    if (trampoline_installed != MMU_INVALID_BANK) {
+        uninstall_trampoline();
     }
-    dma_read_from_sram(bank_phys_addr(bank, NMI_HOOK), nmi_hook_saved, NMI_HOOK_SIZE);
-    dma_write_to_sram(bank_phys_addr(bank, NMI_HOOK), nmi_hook, NMI_HOOK_SIZE);
-    nmi_hook_installed = bank;
+    dma_read_from_sram(bank_phys_addr(bank, ZERO_PAGE), zero_page_saved, sizeof(zero_page_saved));
+    dma_write_to_sram(bank_phys_addr(bank, ZERO_PAGE), trampoline, sizeof(trampoline));
+    trampoline_installed = bank;
 }
 
 static void install_nmi_vector(int bank)
 {
-    dma_write_to_sram(bank_phys_addr(bank, NMI_VECTOR), nmi_vector, NMI_VECTOR_SIZE);
-}
-
-static void uninstall_rst_hook(void)
-{
-    if (rst_hook_installed == MMU_INVALID_BANK)
-        return;
-    dma_write_to_sram(bank_phys_addr(rst_hook_installed, RST_HOOK), rst_hook_saved, RST_HOOK_SIZE);
-    rst_hook_installed = MMU_INVALID_BANK;
-}
-
-static void install_rst_hook(int bank)
-{
-    if (rst_hook_installed != MMU_INVALID_BANK)
-        uninstall_rst_hook();
-    dma_read_from_sram(bank_phys_addr(bank, RST_HOOK), rst_hook_saved, RST_HOOK_SIZE);
-    dma_write_to_sram(bank_phys_addr(bank, RST_HOOK), rst_hook, RST_HOOK_SIZE);
-    rst_hook_installed = bank;
+    dma_write_to_sram(bank_phys_addr(bank, NMI_VECTOR), &trampoline[NMI_VECTOR], NMI_VECTOR_SIZE);
 }
 
 static void install_rst_vector(int bank)
 {
-    dma_write_to_sram(bank_phys_addr(bank, RST_VECTOR), rst_vector, NMI_VECTOR_SIZE);
+    memcpy(tmp_buf[0], &trampoline[RST_VECTOR], RST_VECTOR_SIZE);
+    memcpy(&tmp_buf[0][4], &z80_context.w.pc, 2);
+    dma_write_to_sram(bank_phys_addr(bank, RST_VECTOR), tmp_buf[0], RST_VECTOR_SIZE);
 }
 
 static void bank_select_callback(int from, int to)
@@ -252,16 +234,12 @@ void mon_setup(void)
     mon_assert_nmi();
 }
 
-void mon_prepare(int nmi)
+void mon_prepare()
 {
-    if (nmi) {
-        install_nmi_hook(mmu_bank);
-    } else {
-        install_rst_hook(mmu_bank);
-    }
+    install_trampoline(mmu_bank);
 }
 
-void mon_enter(int nmi)
+void mon_enter()
 {
     static unsigned int prev_output_chars = 0;
     uint16_t stack_addr;
@@ -277,40 +255,23 @@ void mon_enter(int nmi)
     #ifdef CPM_MON_DEBUG
     printf("Enter monitor\n\r");
     #endif
-    if (nmi) {
-        stack_addr = nmi_hook_stack;
-    } else {
-        stack_addr = rst_hook_stack;
-    }
-    z80_context.nmi = nmi;
 
-    dma_read_from_sram(phys_addr(0x0000), tmp_buf[0], stack_addr);
-    z80_context.sp = read_mcu_mem_w(&tmp_buf[0][stack_addr - 2]);
-    z80_context.af = read_mcu_mem_w(&tmp_buf[0][stack_addr - 4]);
-    z80_context.bc = read_mcu_mem_w(&tmp_buf[0][stack_addr - 6]);
-    z80_context.de = read_mcu_mem_w(&tmp_buf[0][stack_addr - 8]);
-    z80_context.hl = read_mcu_mem_w(&tmp_buf[0][stack_addr - 10]);
-    z80_context.ix = read_mcu_mem_w(&tmp_buf[0][stack_addr - 12]);
-    z80_context.iy = read_mcu_mem_w(&tmp_buf[0][stack_addr - 14]);
-
-    uint16_t sp = z80_context.sp;
-    dma_read_from_sram(phys_addr(sp), tmp_buf[0], 2);
-    z80_context.pc = read_mcu_mem_w(tmp_buf[0]);
-    mon_cur_addr = z80_context.pc;
+    dma_read_from_sram(phys_addr(trampoline_work), &z80_context.w, sizeof(z80_context.w));
+    mon_cur_addr = z80_context.w.pc;
 
     if (mon_step_execution) {
         mon_step_execution--;
-        mon_cur_addr = z80_context.pc;
+        mon_cur_addr = z80_context.w.pc;
 
         mon_show_registers();
         dma_read_from_sram(phys_addr(mon_cur_addr), tmp_buf[0], 64);
         disas_ops(disas_z80, phys_addr(mon_cur_addr), tmp_buf[0], 64, 1, NULL);
     }
 
-    if (!nmi && mon_bp_installed && z80_context.pc == (mon_bp_addr & 0xffff) + 1) {
+    if (!z80_context.w.nmi && mon_bp_installed && z80_context.w.pc == (mon_bp_addr & 0xffff) + 1) {
         printf("Break at %04X\n\r", (uint16_t)(mon_bp_addr & 0xffff));
         dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
-        z80_context.pc--;
+        z80_context.w.pc--;
         mon_bp_installed = 0;
         mon_cur_addr = mon_bp_addr;
     }
@@ -835,8 +796,8 @@ int mon_cmd_step(int argc, char *args[])
 
 int mon_cmd_status(int argc, char *args[])
 {
-    uint16_t sp = z80_context.sp;
-    uint16_t pc = z80_context.pc;
+    uint16_t sp = z80_context.w.sp;
+    uint16_t pc = z80_context.w.pc;
 
     mon_show_registers();
 
@@ -1064,23 +1025,7 @@ void mon_leave(void)
 {
     // printf("Leave monitor\n\r");
 
-    uint16_t pc = z80_context.pc;
-    uint16_t sp = z80_context.sp;
-    const unsigned int size = sizeof(z80_context.saved_prog);
-
-    // Rewind PC on the NMI stack by 2 bytes
-    pc -= size;
-    write_mcu_mem_w(tmp_buf[0], pc);
-    dma_write_to_sram(phys_addr(sp), tmp_buf[0], 2);
-
-    // Save original program
-    dma_read_from_sram(phys_addr(pc), &z80_context.saved_prog, size);
-
-    // Insert 'OUT (MON_CLEANUP), A'
-    memset(tmp_buf[0], 0, size);  // Fill with NOP
-    tmp_buf[0][0] = 0xd3;
-    tmp_buf[0][1] = MON_CLEANUP;
-    dma_write_to_sram(phys_addr(pc), tmp_buf[0], size);
+    // the work shall be done by the trampoline code. see trampoline.z80
 
     // Clear NMI
     set_nmi_pin(1);
@@ -1090,12 +1035,8 @@ void mon_cleanup(void)
 {
     // printf("\n\rCleanup monitor\n\r");
 
-    // Restore original program
-    const unsigned int size = sizeof(z80_context.saved_prog);
-    uint16_t pc = z80_context.pc - size;
-    dma_write_to_sram(phys_addr(pc), &z80_context.saved_prog, size);
-    uninstall_nmi_hook();
-    uninstall_rst_hook();
+    uninstall_trampoline();
+    install_rst_vector(mmu_bank);
 
     if (mon_step_execution) {
         invoke_monitor = 1;

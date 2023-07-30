@@ -431,10 +431,8 @@ void io_handle() {
     case HW_CTRL:
         hw_ctrl_write(io_data);
         break;
-    case MON_NMI_PREP:
-    case MON_NMI_ENTER:
-    case MON_RST08_PREP:
-    case MON_RST08_ENTER:
+    case MON_PREPARE:
+    case MON_ENTER:
     case MON_CLEANUP:
         do_bus_master = 1;
         break;
@@ -477,15 +475,13 @@ void io_handle() {
     case MMU_BANK_SEL:
         mmu_bank_select(io_data);
         goto exit_bus_master;
-    case MON_NMI_PREP:
-    case MON_RST08_PREP:
-        mon_prepare(io_addr == MON_NMI_PREP /* NMI or not*/);
+    case MON_PREPARE:
+        mon_prepare();
         io_stat_ = IO_STAT_INTERRUPTED;
         goto exit_bus_master;
-    case MON_NMI_ENTER:
-    case MON_RST08_ENTER:
+    case MON_ENTER:
         io_stat_ = IO_STAT_INTERRUPTED;
-        mon_enter(io_addr == MON_NMI_ENTER /* NMI or not*/);
+        mon_enter();
         while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
         goto exit_bus_master;
