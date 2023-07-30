@@ -156,6 +156,18 @@ static void install_trampoline(int bank)
     dma_read_from_sram(bank_phys_addr(bank, ZERO_PAGE), zero_page_saved, sizeof(zero_page_saved));
     dma_write_to_sram(bank_phys_addr(bank, ZERO_PAGE), trampoline, sizeof(trampoline));
     trampoline_installed = bank;
+    trampoline_destroyed = 0;
+}
+
+static void reinstall_trampoline(void)
+{
+    if (trampoline_installed == MMU_INVALID_BANK || !trampoline_destroyed)
+        return;
+    dma_write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), trampoline,
+                      sizeof(trampoline));
+    dma_write_to_sram(bank_phys_addr(trampoline_installed, trampoline_work), &z80_context.w,
+                      sizeof(z80_context.w));
+    trampoline_destroyed = 0;
 }
 
 static void install_rst_vector(int bank)
@@ -1038,13 +1050,16 @@ int mon_prompt(void)
     return result;
 }
 
+void mon_destroy_trampoline(void)
+{
+    trampoline_destroyed = 1;
+}
+
 void mon_leave(void)
 {
     // printf("Leave monitor\n\r");
 
-    // the work shall be done by the trampoline code. see trampoline.z80
-
-    // Clear NMI
+    reinstall_trampoline();
     set_nmi_pin(1);
 }
 

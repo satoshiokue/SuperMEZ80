@@ -627,3 +627,78 @@ void io_handle() {
 
     io_stat_ = IO_STAT_RUNNING;
 }
+
+int io_invoke_target_cpu(const void *code, unsigned int len)
+{
+    if (io_stat() != IO_STAT_STOPPED && io_stat() != IO_STAT_INTERRUPTED) {
+        return -1;
+    }
+
+    mon_destroy_trampoline();
+    if (io_stat() == IO_STAT_STOPPED) {
+        // TODO
+        // the trampoline code is not yet installed
+        // assert NMI and let target run into interrupted state
+        // I/O write operation related the NMI monitor must be handle here by myself
+    } else if (io_stat() == IO_STAT_INTERRUPTED) {
+        // Okey, the trampoline code is already placed at zero page
+        __write_to_sram(0x0000, code, len);
+        //dma_write_to_sram(0x0000, code, len);
+        bus_master(0);
+        board_clear_io_event(); // Clear interrupt flag
+        set_busrq_pin(1);       // /BUSREQ is deactive
+    }
+
+    int done = 0;
+    int out_chars = 0;
+    uint8_t io_addr;
+    uint8_t io_data;
+    while(!done) {
+        // Wait for IO access
+        board_wait_io_event();
+        if (!board_io_event())
+            continue;
+
+        io_addr = addr_l_pins();
+        io_data = data_pins();
+
+        if (rd_pin() == 0) {
+            // something wrong
+            printf("R%02X ", io_addr);
+            break;
+        }
+        switch (io_addr) {
+        case UART_DREG:
+            putch_buffered(io_data);
+            out_chars++;
+            break;
+        case TGTINV_TRAP:
+            if (out_chars) {
+                con_flush_buffer();
+                out_chars = 0;
+            }
+            done = 1;
+            break;
+        default:
+            if (out_chars) {
+                con_flush_buffer();
+                out_chars = 0;
+            }
+            printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", io_addr, io_data,
+                   io_addr, io_data);
+            break;
+        }
+
+        board_clear_io_event(); // Clear interrupt flag
+        if (!done) {
+            set_wait_pin(1);    // Release wait
+        }
+    }
+
+    set_busrq_pin(0);           // /BUSREQ is active
+    set_wait_pin(1);            // Release wait
+    while(!ioreq_pin());        // wait for /IORQ to be cleared
+    bus_master(1);
+
+    return (int)(signed char)io_data;
+}

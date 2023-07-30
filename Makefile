@@ -42,6 +42,7 @@ HDRS := $(SRC_DIR)/supermez80.h $(SRC_DIR)/picconfig.h \
         $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/SPI.h $(DISKIO_DIR)/SDCard.h $(DISKIO_DIR)/mcp23s08.h \
         $(SRC_DIR)/disas.h $(SRC_DIR)/disas_z80.h \
         $(BUILD_DIR)/ipl.inc $(BUILD_DIR)/trampoline.inc $(BUILD_DIR)/mmu_exercise.inc \
+        $(BUILD_DIR)/dma_helper.inc \
         $(DISKIO_DIR)/pic18f47q43_spi.c \
         $(DISKIO_DIR)/SDCard.c \
         $(DISKIO_DIR)/mcp23s08.c \

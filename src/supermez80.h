@@ -84,6 +84,7 @@
 #define MON_CLEANUP      170    // AAh clean up monitor mode
 #define MON_PREPARE      171    // ABh prepare monitor mode
 #define MON_ENTER        172    // ACh clean up monitor mode
+#define TGTINV_TRAP      173    // ADh return from target CPU invocation
 
 #define MMU_INVALID_BANK 0xff
 
@@ -144,6 +145,7 @@ extern int getch(void);
 extern char getch_buffered(void);
 extern void ungetch(char c);
 extern void con_flush_buffer(void);
+extern void putch_buffered(char c);
 extern drive_t drives[];
 extern const int num_drives;
 extern unsigned int io_output_chars;
@@ -153,6 +155,7 @@ extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned in
                              uint32_t *lba);
 extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
                                uint32_t lba);
+extern int io_invoke_target_cpu(const void *code, unsigned int len);
 
 // monitor
 extern int invoke_monitor;
@@ -164,6 +167,7 @@ void mon_setup(void);
 void mon_prepare(void);
 void mon_enter(void);
 int mon_prompt(void);
+void mon_destroy_trampoline(void);
 void mon_leave(void);
 void mon_cleanup(void);
 
