@@ -292,6 +292,8 @@ void try_to_invoke_monitor(void) {
         set_busrq_pin(1);       // Clear /BUSREQ so that the Z80 can handle NMI
 }
 
+static uint8_t disk_stat = DISK_ST_ERROR;
+
 void io_handle() {
     static uint8_t disk_drive = 0;
     static uint8_t disk_track = 0;
@@ -299,7 +301,6 @@ void io_handle() {
     static uint8_t disk_op = 0;
     static uint8_t disk_dmal = 0;
     static uint8_t disk_dmah = 0;
-    static uint8_t disk_stat = DISK_ST_ERROR;
     static uint8_t *disk_datap = NULL;
     uint8_t c;
 
@@ -350,10 +351,8 @@ void io_handle() {
         set_data_pins(hw_ctrl_read());
         break;
     default:
-        #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O read %d (%02XH)\n\r", io_addr, io_addr);
         invoke_monitor = 1;
-        #endif
         set_data_pins(0xff);    // Invalid data
         break;
     }
@@ -442,11 +441,9 @@ void io_handle() {
         do_bus_master = 1;
         break;
     default:
-        #ifdef CPM_IO_DEBUG
         printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", io_addr, io_data, io_addr,
                io_data);
         invoke_monitor = 1;
-        #endif
         break;
     }
 
@@ -633,39 +630,26 @@ void io_handle() {
     io_stat_ = IO_STAT_RUNNING;
 }
 
-int io_invoke_target_cpu(const void *code, unsigned int len, const void *params, unsigned int plen)
+int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
 {
-    if (io_stat() != IO_STAT_STOPPED && io_stat() != IO_STAT_INTERRUPTED) {
-        return -1;
-    }
-
-    mon_destroy_trampoline();
-    if (io_stat() == IO_STAT_STOPPED) {
-        // TODO
-        // the trampoline code is not yet installed
-        // assert NMI and let target run into interrupted state
-        // I/O write operation related the NMI monitor must be handle here by myself
-    }
-
-    assert(io_stat() == IO_STAT_INTERRUPTED);
-
-    // Okey, the trampoline code is already placed at zero page
-    if (code) {
-        __write_to_sram(0x0000, code, len);
-    }
-    if (params) {
-        __write_to_sram(0x0004, params, plen);
-    }
-
-    //dma_write_to_sram(0x0000, code, len);
-    bus_master(0);
-    board_clear_io_event(); // Clear interrupt flag
-    set_busrq_pin(1);       // /BUSREQ is deactive
-
     int done = 0;
+    int result = -1;
     uint8_t io_addr;
     uint8_t io_data;
-    while(!done) {
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: %3d      (%02XH     ) ...\n\r", __func__, wait_io_addr, wait_io_addr);
+    #endif
+
+    assert(io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_INTERRUPTED);
+
+    bus_master(0);
+    set_busrq_pin(1);       // /BUSREQ is deactive
+    set_wait_pin(1);        // Release wait
+    while(!ioreq_pin());    // wait for /IORQ to be cleared
+    board_clear_io_event(); // Clear interrupt flag
+
+    while (1) {
         // Wait for IO access
         board_wait_io_event();
         if (!board_io_event())
@@ -674,34 +658,137 @@ int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
         io_addr = addr_l_pins();
         io_data = data_pins();
 
-        if (rd_pin() == 0) {
-            // something wrong
-            printf("R%02X ", io_addr);
-            break;
+        if (rd_pin() == 0 && io_addr == DISK_REG_FDCST) {
+            //
+            // This might be a dirty hack. But works well?
+            //
+            #ifdef CPM_IO_DEBUG
+            printf("%s: %3d      (%02XH     ) ... disk_stat=%02Xh\n\r", __func__,
+                   wait_io_addr, wait_io_addr, disk_stat);
+            #endif
+            set_data_dir(0x00);         // Set as output
+            set_data_pins(disk_stat);
+            // Let Z80 read the data
+            set_busrq_pin(1);           // Release /BUSREQ
+            set_wait_pin(1);            // Release wait
+            while(!ioreq_pin());        // wait for /IORQ to be cleared
+            board_clear_io_event();     // Clear interrupt flag
+            set_data_dir(0xff);         // Set as input
+            continue;
         }
-        switch (io_addr) {
-        case UART_DREG:
-            putch_buffered(io_data);
-            break;
-        case TGTINV_TRAP:
-            done = 1;
-            break;
-        default:
-            printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", io_addr, io_data,
-                   io_addr, io_data);
+
+        if (rd_pin() == 0 || (io_addr != UART_DREG && io_addr != wait_io_addr)) {
+            // something wrong
+            printf("%s: ERROR: I/O %5s %3d, %3d (%02XH, %02XH) while waiting for %d (%02XH)\n\r",
+                   __func__, rd_pin() == 0 ? "read" : "write",
+                   io_addr, io_data, io_addr, io_data, wait_io_addr, wait_io_addr);
             break;
         }
 
-        board_clear_io_event(); // Clear interrupt flag
-        if (!done) {
-            set_wait_pin(1);    // Release wait
+        if (io_addr == wait_io_addr) {
+            if (result_io_data)
+                *result_io_data = io_data;
+            result = 0;
+            break;
         }
+
+        // write to UART_DREG
+        putch_buffered(io_data);
+        board_clear_io_event(); // Clear interrupt flag
+        set_wait_pin(1);        // Release wait
     }
 
     set_busrq_pin(0);           // /BUSREQ is active
     set_wait_pin(1);            // Release wait
     while(!ioreq_pin());        // wait for /IORQ to be cleared
+    board_clear_io_event();     // Clear interrupt flag
     bus_master(1);
 
-    return (int)(signed char)io_data;
+    #ifdef CPM_IO_DEBUG
+    printf("%s: %3d, %3d (%02XH, %02XH) ... result=%d\n\r", __func__, io_addr, io_data,
+           io_addr, io_data,result);
+    #endif
+
+    return result;
+}
+
+void io_invoke_target_cpu_prepare(int *saved_status)
+{
+    assert(io_stat() != IO_STAT_STOPPED || io_stat() != IO_STAT_INTERRUPTED);
+
+    if (io_stat() == IO_STAT_INTERRUPTED) {
+        *saved_status = 0;
+        return;
+    }
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: mon_setup()\n\r", __func__);
+    #endif
+    bus_master(1);
+    mon_setup();            // Hook NMI handler and assert /NMI
+
+    io_wait_write(MON_PREPARE, NULL);
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: mon_prepare()\n\r", __func__);
+    #endif
+    mon_prepare();          // Install the trampoline code
+    io_wait_write(MON_ENTER, NULL);
+    io_stat_ = IO_STAT_INTERRUPTED;
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: mon_enter()\n\r", __func__);
+    #endif
+    mon_enter();            // Now we can use the trampoline
+
+    *saved_status = 1;
+    return;
+}
+
+int io_invoke_target_cpu(const void *code, unsigned int len, const void *params, unsigned int plen)
+{
+    uint8_t result_data;
+
+    assert(io_stat() == IO_STAT_INTERRUPTED);
+    mon_destroy_trampoline();
+
+    if (code) {
+        __write_to_sram(0x0000, code, len);
+    }
+    if (params) {
+        __write_to_sram(0x0004, params, plen);
+    }
+
+    // Run the code
+    io_wait_write(TGTINV_TRAP, &result_data);
+
+    return (int)(signed char)result_data;
+}
+
+void io_invoke_target_cpu_teardown(int *saved_status)
+{
+    if (*saved_status == 0) {
+        return;
+    }
+
+    assert(io_stat() == IO_STAT_INTERRUPTED);
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: mon_leave()\n\r", __func__);
+    #endif
+    mon_leave();
+
+    io_wait_write(MON_CLEANUP, NULL);
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: mon_cleanup() ...\n\r", __func__);
+    #endif
+    mon_cleanup();
+
+    #ifdef CPM_IO_DEBUG
+    printf("%s: mon_cleanup() ... done\n\r", __func__);
+    #endif
+    io_stat_ = IO_STAT_STOPPED;
+
+    *saved_status = 0;  // fail safe
 }

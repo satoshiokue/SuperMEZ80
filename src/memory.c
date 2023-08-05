@@ -139,6 +139,7 @@ static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int 
     uint16_t addr_gap_mask = ~board_low_addr_mask();
     uint16_t addr = (uint16_t)(dest & 0xffff);
     unsigned int n;
+    int saved_io_status;
 
     #ifdef CPM_MEMCPY_DEBUG
     printf("%22s: addr=  %04X, len=%4u\n\r", __func__, addr, len);
@@ -149,6 +150,7 @@ static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int 
         board_write_to_sram(addr, (uint8_t*)buf, len);
         return;
     }
+    io_invoke_target_cpu_prepare(&saved_io_status);
     while (0 < len) {
         n = UTIL_MIN(memcpy_on_target_buf_size, len);
         board_setup_addrbus(dest & 0xffff0000);
@@ -161,6 +163,7 @@ static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int 
         addr += n;
         buf += n;
     }
+    io_invoke_target_cpu_teardown(&saved_io_status);
 }
 
 void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
@@ -190,6 +193,7 @@ static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
     uint16_t addr_gap_mask = ~board_low_addr_mask();
     uint16_t addr = (uint16_t)(src & 0xffff);
     unsigned int n;
+    int saved_io_status;
 
     #ifdef CPM_MEMCPY_DEBUG
     printf("%22s: addr=  %04X, len=%4u\n\r", __func__, addr, len);
@@ -200,6 +204,7 @@ static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
         board_read_from_sram(addr, (uint8_t*)buf, len);
         return;
     }
+    io_invoke_target_cpu_prepare(&saved_io_status);
     while (0 < len) {
         n = UTIL_MIN(memcpy_on_target_buf_size, len);
         board_setup_addrbus(src & 0xffff0000);
@@ -212,6 +217,7 @@ static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
         addr += n;
         buf += n;
     }
+    io_invoke_target_cpu_teardown(&saved_io_status);
 }
 
 void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)

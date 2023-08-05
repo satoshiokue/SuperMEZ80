@@ -18,7 +18,7 @@
 
 #define ENABLE_DISK_DEBUG
 //#define CPM_MEM_DEBUG
-#define CPM_IO_DEBUG
+//#define CPM_IO_DEBUG
 //#define CPM_MMU_DEBUG
 //#define CPM_MEMCPY_DEBUG
 //#define CPM_MMU_EXERCISE
@@ -155,8 +155,10 @@ extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned in
                              uint32_t *lba);
 extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
                                uint32_t lba);
+extern void io_invoke_target_cpu_prepare(int *saved_status);
 extern int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
                                unsigned int plen);
+extern void io_invoke_target_cpu_teardown(int *saved_status);
 
 // monitor
 extern int invoke_monitor;
