@@ -143,8 +143,8 @@ static void uninstall_trampoline(void)
 {
     if (trampoline_installed == MMU_INVALID_BANK)
         return;
-    dma_write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), zero_page_saved,
-                      ZERO_PAGE_SIZE);
+    __write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), zero_page_saved,
+                    ZERO_PAGE_SIZE);
     trampoline_installed = MMU_INVALID_BANK;
 }
 
@@ -153,8 +153,8 @@ static void install_trampoline(int bank)
     if (trampoline_installed != MMU_INVALID_BANK) {
         uninstall_trampoline();
     }
-    dma_read_from_sram(bank_phys_addr(bank, ZERO_PAGE), zero_page_saved, sizeof(zero_page_saved));
-    dma_write_to_sram(bank_phys_addr(bank, ZERO_PAGE), trampoline, sizeof(trampoline));
+    __read_from_sram(bank_phys_addr(bank, ZERO_PAGE), zero_page_saved, sizeof(zero_page_saved));
+    __write_to_sram(bank_phys_addr(bank, ZERO_PAGE), trampoline, sizeof(trampoline));
     trampoline_installed = bank;
     trampoline_destroyed = 0;
 }
@@ -163,10 +163,10 @@ static void reinstall_trampoline(void)
 {
     if (trampoline_installed == MMU_INVALID_BANK || !trampoline_destroyed)
         return;
-    dma_write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), trampoline,
-                      sizeof(trampoline));
-    dma_write_to_sram(bank_phys_addr(trampoline_installed, trampoline_work), &z80_context.w,
-                      sizeof(z80_context.w));
+    __write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), trampoline,
+                    sizeof(trampoline));
+    __write_to_sram(bank_phys_addr(trampoline_installed, trampoline_work), &z80_context.w,
+                    sizeof(z80_context.w));
     trampoline_destroyed = 0;
 }
 
@@ -174,7 +174,7 @@ static void install_rst_vector(int bank)
 {
     memcpy(tmp_buf[0], &trampoline[RST_VECTOR], RST_VECTOR_SIZE);
     memcpy(&tmp_buf[0][4], &z80_context.w.pc, 2);
-    dma_write_to_sram(bank_phys_addr(bank, RST_VECTOR), tmp_buf[0], RST_VECTOR_SIZE);
+    __write_to_sram(bank_phys_addr(bank, RST_VECTOR), tmp_buf[0], RST_VECTOR_SIZE);
 }
 
 static void bank_select_callback(int from, int to)
@@ -285,7 +285,7 @@ void mon_enter()
     printf("Enter monitor\n\r");
     #endif
 
-    dma_read_from_sram(phys_addr(trampoline_work), &z80_context.w, sizeof(z80_context.w));
+    __read_from_sram(phys_addr(trampoline_work), &z80_context.w, sizeof(z80_context.w));
     mon_cur_addr = z80_context.w.pc;
 
     if (mon_step_execution) {
@@ -293,13 +293,13 @@ void mon_enter()
         mon_cur_addr = z80_context.w.pc;
 
         mon_show_registers();
-        dma_read_from_sram(phys_addr(mon_cur_addr), tmp_buf[0], 64);
+        __read_from_sram(phys_addr(mon_cur_addr), tmp_buf[0], 64);
         disas_ops(disas_z80, phys_addr(mon_cur_addr), tmp_buf[0], 64, 1, NULL);
     }
 
     if (!z80_context.w.nmi && mon_bp_installed && z80_context.w.pc == (mon_bp_addr & 0xffff) + 1) {
         printf("Break at %04X\n\r", (uint16_t)(mon_bp_addr & 0xffff));
-        dma_write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
+        __write_to_sram(mon_bp_addr, &mon_bp_saved_inst, 1);
         z80_context.w.pc--;
         mon_bp_installed = 0;
         mon_cur_addr = mon_bp_addr;

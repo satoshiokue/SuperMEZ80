@@ -226,18 +226,18 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
     }
 }
 
-void __write_to_sram(uint16_t dest, const void *buf, unsigned int len)
+void __write_to_sram(uint32_t dest, const void *buf, unsigned int len)
 {
-    board_setup_addrbus(phys_addr(dest));
+    board_setup_addrbus(dest);
     set_data_dir(0x00);     // Set as output to write to the SRAM
-    board_write_to_sram(dest, (uint8_t*)buf, len);
+    board_write_to_sram(dest & 0xffff, (uint8_t*)buf, len);
 }
 
-void __read_from_sram(uint16_t src, const void *buf, unsigned int len)
+void __read_from_sram(uint32_t src, const void *buf, unsigned int len)
 {
-    board_setup_addrbus(phys_addr(src));
+    board_setup_addrbus(src);
     set_data_dir(0xff);     // Set as input to read from the SRAM
-    board_read_from_sram(src, (uint8_t*)buf, len);
+    board_read_from_sram(src & 0xffff, (uint8_t*)buf, len);
 }
 
 void mmu_bank_config(int nbanks)

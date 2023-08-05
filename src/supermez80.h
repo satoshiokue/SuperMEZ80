@@ -185,8 +185,8 @@ extern void mem_init(void);
 extern void set_bank_pins(uint32_t addr);
 extern void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len);
 extern void dma_read_from_sram(uint32_t src, void *buf, unsigned int len);
-extern void __write_to_sram(uint16_t dest, const void *buf, unsigned int len);
-extern void __read_from_sram(uint16_t src, const void *buf, unsigned int len);
+extern void __write_to_sram(uint32_t dest, const void *buf, unsigned int len);
+extern void __read_from_sram(uint32_t src, const void *buf, unsigned int len);
 extern void mmu_bank_config(int nbanks);
 extern void mmu_bank_select(int bank);
 
