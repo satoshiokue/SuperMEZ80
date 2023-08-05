@@ -144,7 +144,6 @@ extern int io_stat(void);
 extern int getch(void);
 extern char getch_buffered(void);
 extern void ungetch(char c);
-extern void con_flush_buffer(void);
 extern void putch_buffered(char c);
 extern drive_t drives[];
 extern const int num_drives;

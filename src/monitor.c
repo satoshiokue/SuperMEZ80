@@ -273,9 +273,6 @@ void mon_enter()
     static unsigned int prev_output_chars = 0;
     uint16_t stack_addr;
 
-    // wait for console output buffer empty
-    con_flush_buffer();
-
     // new line if some output from the target
     if (prev_output_chars != io_output_chars) {
         printf("\n\r");

@@ -74,8 +74,11 @@ int io_stat(void) {
     return io_stat_;
 }
 
+static void con_flush_buffer(void);
+
 // UART3 Transmit
 void putch(char c) {
+    con_flush_buffer();
     while(!U3TXIF);             // Wait or Tx interrupt flag set
     U3TXB = c;                  // Write data
 }
@@ -87,7 +90,7 @@ int getch(void) {
 }
 
 // Shall be called with disabling the interrupt
-void __con_flush_buffer(void) {
+static void __con_flush_buffer(void) {
     while (0 < con_output && U3TXIF) {
         U3TXB = con_output_buffer[con_output_buffer_head];
         con_output_buffer_head = ((con_output_buffer_head + 1) % sizeof(con_output_buffer));
@@ -95,7 +98,7 @@ void __con_flush_buffer(void) {
     }
 }
 
-void con_flush_buffer(void) {
+static void con_flush_buffer(void) {
     while (0 < con_output)
         __delay_ms(50);
 }
@@ -660,7 +663,6 @@ int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
     set_busrq_pin(1);       // /BUSREQ is deactive
 
     int done = 0;
-    int out_chars = 0;
     uint8_t io_addr;
     uint8_t io_data;
     while(!done) {
@@ -680,20 +682,11 @@ int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
         switch (io_addr) {
         case UART_DREG:
             putch_buffered(io_data);
-            out_chars++;
             break;
         case TGTINV_TRAP:
-            if (out_chars) {
-                con_flush_buffer();
-                out_chars = 0;
-            }
             done = 1;
             break;
         default:
-            if (out_chars) {
-                con_flush_buffer();
-                out_chars = 0;
-            }
             printf("WARNING: unknown I/O write %d, %d (%02XH, %02XH)\n\r", io_addr, io_data,
                    io_addr, io_data);
             break;
