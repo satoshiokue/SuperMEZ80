@@ -187,6 +187,8 @@ extern void (*board_set_bank_pins_hook)(uint32_t addr);
 #define set_bank_pins(addr) (*board_set_bank_pins_hook)(addr)
 extern void (*board_setup_addrbus_hook)(uint32_t addr);
 #define board_setup_addrbus(addr) (*board_setup_addrbus_hook)(addr)
+extern uint32_t (*board_high_addr_mask_hook)(void);
+#define board_high_addr_mask(addr) (*board_high_addr_mask_hook)()
 extern uint16_t (*board_low_addr_mask_hook)(void);
 #define board_low_addr_mask(addr) (*board_low_addr_mask_hook)()
 extern void (*board_write_to_sram_hook)(uint16_t addr, uint8_t *buf, unsigned int len);

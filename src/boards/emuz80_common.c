@@ -163,6 +163,16 @@ static void emuz80_common_start_z80(void)
     IVTLOCKbits.IVTLOCKED = 0x01;
 }
 
+static uint32_t emuz80_common_high_addr_mask(void)
+{
+    return HIGH_ADDR_MASK;
+}
+
+static uint16_t emuz80_common_low_addr_mask(void)
+{
+    return LOW_ADDR_MASK;
+}
+
 static void emuz80_common_write_to_sram(uint16_t addr, uint8_t *buf, unsigned int len)
 {
     union address_bus_u ab;
@@ -266,6 +276,8 @@ static void emuz80_common_init()
 {
     board_sys_init_hook         = emuz80_common_sys_init;
     board_start_z80_hook        = emuz80_common_start_z80;
+    board_high_addr_mask_hook   = emuz80_common_high_addr_mask;
+    board_low_addr_mask_hook    = emuz80_common_low_addr_mask;
     board_write_to_sram_hook    = emuz80_common_write_to_sram;
     board_read_from_sram_hook   = emuz80_common_read_from_sram;
 

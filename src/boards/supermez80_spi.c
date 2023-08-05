@@ -372,11 +372,6 @@ static void supermez80_spi_setup_addrbus(uint32_t addr)
     mcp23s08_set_pending(MCP23S08_ctx, pending);
 }
 
-static uint16_t supermez80_spi_low_addr_mask(void)
-{
-    return LOW_ADDR_MASK;
-}
-
 static __bit supermez80_spi_io_event(void)
 {
     return CLC3IF;
@@ -401,7 +396,6 @@ void board_init()
     board_start_z80_hook = supermez80_spi_start_z80;
     board_set_bank_pins_hook = supermez80_spi_set_bank_pins;
     board_setup_addrbus_hook = supermez80_spi_setup_addrbus;
-    board_low_addr_mask_hook = supermez80_spi_low_addr_mask;
     board_io_event_hook = supermez80_spi_io_event;
     board_wait_io_event_hook = supermez80_spi_wait_io_event;
     board_clear_io_event_hook = supermez80_spi_clear_io_event;
