@@ -8,6 +8,8 @@
 #include <supermez80.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
+
 #include <mcp23s08.h>
 #include <utils.h>
 
@@ -107,41 +109,120 @@ void mem_init()
 #endif  // !CPM_MMU_EXERCISE
 }
 
+#define memcpy_on_target_buf 0x80
+#define memcpy_on_target_buf_size 0x80
+static void __memcpy_on_target(uint16_t dest, uint16_t src, unsigned int len)
+{
+    static const unsigned char dma_helper_z80[] = {
+        #include "dma_helper.inc"
+    };
+    static struct dma_helper_param {
+        uint16_t src_addr;
+        uint16_t dest_addr;
+        uint8_t length;
+    } params;
+
+    //printf("%s %04Xh to %04Xh, %u bytes\n\r", __func__, src, dest, len);
+
+    assert(sizeof(params) == 5);
+    assert(len <= 256);
+    params.src_addr = src;
+    params.dest_addr = dest;
+    params.length = (uint8_t)len;
+    io_invoke_target_cpu(dma_helper_z80, sizeof(dma_helper_z80), &params, sizeof(params));
+}
+
+static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int len)
+{
+    uint16_t addr_gap_mask = ~board_low_addr_mask();
+    uint16_t addr = (uint16_t)(dest & 0xffff);
+    unsigned int n;
+
+    // printf(" %s: addr=%04X, len=%4u\n\r", __func__, addr, len);
+
+    if (!(addr & addr_gap_mask || (addr + len - 1) & addr_gap_mask)) {
+        set_data_dir(0x00);     // Set as output to write to the SRAM
+        board_write_to_sram(addr, (uint8_t*)buf, len);
+        return;
+    }
+    while (0 < len) {
+        n = UTIL_MIN(memcpy_on_target_buf_size, len);
+        board_setup_addrbus(dest & 0xffff0000);
+        set_data_dir(0x00);     // Set as output to write to the SRAM
+        board_write_to_sram(memcpy_on_target_buf, (uint8_t*)buf, n);
+        board_setup_addrbus(dest & 0xffff0000);
+        __memcpy_on_target(addr, memcpy_on_target_buf, n);
+        board_setup_addrbus(dest);
+        len -= n;
+        addr += n;
+        buf += n;
+    }
+}
+
 void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
 {
-    uint16_t low_addr_mask = board_low_addr_mask();
-    uint16_t addr = (dest & low_addr_mask);
+    uint32_t high_addr_mask = board_high_addr_mask();
+    uint16_t addr = (uint16_t)(dest & ~high_addr_mask);
     uint16_t second_half = 0;
 
-    if ((uint32_t)low_addr_mask + 1 < (uint32_t)addr + len)
-        second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)low_addr_mask + 1));
+    // printf(" %s: dest=%06Xl, len=%4u\n\r", __func__, dest, len);
+
+    if ((uint32_t)~high_addr_mask + 1 < (uint32_t)addr + len)
+        second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)~high_addr_mask + 1));
 
     board_setup_addrbus(dest);
-    set_data_dir(0x00);     // Set as output to write to the SRAM
-    board_write_to_sram(addr, (uint8_t*)buf, len - second_half);
+    write_to_sram_low_addr(dest, (uint8_t*)buf, len - second_half);
 
     if (0 < second_half) {
         board_setup_addrbus(dest + len - second_half);
-        board_write_to_sram(addr, &((uint8_t*)buf)[len - second_half], second_half);
+        write_to_sram_low_addr(dest, &((uint8_t*)buf)[len - second_half], second_half);
+    }
+}
+
+static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
+{
+    uint16_t addr_gap_mask = ~board_low_addr_mask();
+    uint16_t addr = (uint16_t)(src & 0xffff);
+    unsigned int n;
+
+    // printf("%s: addr=%04X, len=%4u\n\r", __func__, addr, len);
+
+    if (!(addr & addr_gap_mask || (addr + len - 1) & addr_gap_mask)) {
+        set_data_dir(0xff);     // Set as input to read from the SRAM
+        board_read_from_sram(addr, (uint8_t*)buf, len);
+        return;
+    }
+    while (0 < len) {
+        n = UTIL_MIN(memcpy_on_target_buf_size, len);
+        board_setup_addrbus(src & 0xffff0000);
+        __memcpy_on_target(memcpy_on_target_buf, addr, n);
+        board_setup_addrbus(src & 0xffff0000);
+        set_data_dir(0xff);     // Set as input to read from the SRAM
+        board_read_from_sram(memcpy_on_target_buf, (uint8_t*)buf, n);
+        board_setup_addrbus(src);
+        len -= n;
+        addr += n;
+        buf += n;
     }
 }
 
 void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
 {
-    uint16_t low_addr_mask = board_low_addr_mask();
-    uint16_t addr = (src & low_addr_mask);
+    uint32_t high_addr_mask = board_high_addr_mask();
+    uint16_t addr = (uint16_t)(src & ~high_addr_mask);
     uint16_t second_half = 0;
 
-    if ((uint32_t)low_addr_mask + 1 < (uint32_t)addr + len)
-        second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)low_addr_mask + 1));
+    // printf("%s: addr=%06lX, len=%4u\n\r", __func__, src, len);
+
+    if ((uint32_t)~high_addr_mask + 1 < (uint32_t)addr + len)
+        second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)~high_addr_mask + 1));
 
     board_setup_addrbus(src);
-    set_data_dir(0xff);     // Set as input to read from the SRAM
-    board_read_from_sram(addr, (uint8_t*)buf, len - second_half);
+    read_from_sram_low_addr(src, (uint8_t*)buf, len - second_half);
 
     if (0 < second_half) {
         board_setup_addrbus(src + len - second_half);
-        board_read_from_sram(addr, &((uint8_t*)buf)[len - second_half], second_half);
+        read_from_sram_low_addr(src, &((uint8_t*)buf)[len - second_half], second_half);
     }
 }
 

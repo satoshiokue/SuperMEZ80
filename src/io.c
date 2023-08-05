@@ -26,6 +26,8 @@
 
 #include <supermez80.h>
 #include <stdio.h>
+#include <assert.h>
+
 #include <ff.h>
 #include <utils.h>
 
@@ -628,7 +630,7 @@ void io_handle() {
     io_stat_ = IO_STAT_RUNNING;
 }
 
-int io_invoke_target_cpu(const void *code, unsigned int len)
+int io_invoke_target_cpu(const void *code, unsigned int len, const void *params, unsigned int plen)
 {
     if (io_stat() != IO_STAT_STOPPED && io_stat() != IO_STAT_INTERRUPTED) {
         return -1;
@@ -640,14 +642,22 @@ int io_invoke_target_cpu(const void *code, unsigned int len)
         // the trampoline code is not yet installed
         // assert NMI and let target run into interrupted state
         // I/O write operation related the NMI monitor must be handle here by myself
-    } else if (io_stat() == IO_STAT_INTERRUPTED) {
-        // Okey, the trampoline code is already placed at zero page
-        __write_to_sram(0x0000, code, len);
-        //dma_write_to_sram(0x0000, code, len);
-        bus_master(0);
-        board_clear_io_event(); // Clear interrupt flag
-        set_busrq_pin(1);       // /BUSREQ is deactive
     }
+
+    assert(io_stat() == IO_STAT_INTERRUPTED);
+
+    // Okey, the trampoline code is already placed at zero page
+    if (code) {
+        __write_to_sram(0x0000, code, len);
+    }
+    if (params) {
+        __write_to_sram(0x0004, params, plen);
+    }
+
+    //dma_write_to_sram(0x0000, code, len);
+    bus_master(0);
+    board_clear_io_event(); // Clear interrupt flag
+    set_busrq_pin(1);       // /BUSREQ is deactive
 
     int done = 0;
     int out_chars = 0;

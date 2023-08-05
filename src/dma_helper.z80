@@ -33,21 +33,33 @@ TGTINV_TRAP	EQU	173	; return from target CPU invocation
 	ORG	0000h
 TGTINV_GATE:
 	OUT (TGTINV_TRAP),A
+        JR ENTRY
+
+	ORG	0004h
+PARAMS:
+SRC_ADDR:
+	DEFW	0000h		; source address
+DEST_ADDR:
+	DEFW	0000h		; destination address
+LENGTH:
+	DEFB	00h		; number of bytes to copy
+
 ;
 ;	DMA helper entry
 ;
-	LD	HL,HLOMSG
-PRTMSG:
+ENTRY:
+	LD	HL,(SRC_ADDR)
+	LD	DE,(DEST_ADDR)
+	LD	A,(LENGTH)
+	LD	B,A
+LOOP:
 	LD	A,(HL)
-	OUT	(CONDAT),A
+	LD	(DE),A
 	INC	HL
-	OR	A
-	JP	NZ,PRTMSG
+	INC	DE
+	DJNZ	LOOP
 
-	LD	A,-88
+	LD	A,0		; return value
 	JR	TGTINV_GATE
-
-HLOMSG:	DEFM	'Hello from new DMA world!'
-	DEFB	13,10,0
 ;
 	END

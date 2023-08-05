@@ -61,7 +61,7 @@
 #define SRAM_OE         Z80_RD
 #define SRAM_WE         Z80_WR
 
-#define HIGH_ADDR_MASK  0xffffff00
+#define HIGH_ADDR_MASK  0xffffc000
 #define LOW_ADDR_MASK   0x000000ff
 
 #include "emuz80_common.c"

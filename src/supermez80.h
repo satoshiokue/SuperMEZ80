@@ -155,7 +155,8 @@ extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned in
                              uint32_t *lba);
 extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
                                uint32_t lba);
-extern int io_invoke_target_cpu(const void *code, unsigned int len);
+extern int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
+                               unsigned int plen);
 
 // monitor
 extern int invoke_monitor;
