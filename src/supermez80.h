@@ -20,6 +20,7 @@
 //#define CPM_MEM_DEBUG
 #define CPM_IO_DEBUG
 //#define CPM_MMU_DEBUG
+//#define CPM_MEMCPY_DEBUG
 //#define CPM_MMU_EXERCISE
 //#define CPM_MON_DEBUG
 

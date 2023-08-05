@@ -122,7 +122,9 @@ static void __memcpy_on_target(uint16_t dest, uint16_t src, unsigned int len)
         uint8_t length;
     } params;
 
-    //printf("%s %04Xh to %04Xh, %u bytes\n\r", __func__, src, dest, len);
+    #ifdef CPM_MEMCPY_DEBUG
+    printf("%22s: %04X to %04X, %u bytes\n\r", __func__, src, dest, len);
+    #endif
 
     assert(sizeof(params) == 5);
     assert(len <= 256);
@@ -138,7 +140,9 @@ static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int 
     uint16_t addr = (uint16_t)(dest & 0xffff);
     unsigned int n;
 
-    // printf(" %s: addr=%04X, len=%4u\n\r", __func__, addr, len);
+    #ifdef CPM_MEMCPY_DEBUG
+    printf("%22s: addr=  %04X, len=%4u\n\r", __func__, addr, len);
+    #endif
 
     if (!(addr & addr_gap_mask || (addr + len - 1) & addr_gap_mask)) {
         set_data_dir(0x00);     // Set as output to write to the SRAM
@@ -165,7 +169,9 @@ void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len)
     uint16_t addr = (uint16_t)(dest & ~high_addr_mask);
     uint16_t second_half = 0;
 
-    // printf(" %s: dest=%06Xl, len=%4u\n\r", __func__, dest, len);
+    #ifdef CPM_MEMCPY_DEBUG
+    printf("%22s: addr=%06lX, len=%4u\n\r", __func__, dest, len);
+    #endif
 
     if ((uint32_t)~high_addr_mask + 1 < (uint32_t)addr + len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)~high_addr_mask + 1));
@@ -185,7 +191,9 @@ static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
     uint16_t addr = (uint16_t)(src & 0xffff);
     unsigned int n;
 
-    // printf("%s: addr=%04X, len=%4u\n\r", __func__, addr, len);
+    #ifdef CPM_MEMCPY_DEBUG
+    printf("%22s: addr=  %04X, len=%4u\n\r", __func__, addr, len);
+    #endif
 
     if (!(addr & addr_gap_mask || (addr + len - 1) & addr_gap_mask)) {
         set_data_dir(0xff);     // Set as input to read from the SRAM
@@ -212,7 +220,9 @@ void dma_read_from_sram(uint32_t src, void *buf, unsigned int len)
     uint16_t addr = (uint16_t)(src & ~high_addr_mask);
     uint16_t second_half = 0;
 
-    // printf("%s: addr=%06lX, len=%4u\n\r", __func__, src, len);
+    #ifdef CPM_MEMCPY_DEBUG
+    printf("%22s: addr=%06lX, len=%4u\n\r", __func__, src, len);
+    #endif
 
     if ((uint32_t)~high_addr_mask + 1 < (uint32_t)addr + len)
         second_half = (uint16_t)(((uint32_t)addr + len) - ((uint32_t)~high_addr_mask + 1));
