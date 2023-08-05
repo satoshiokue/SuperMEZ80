@@ -23,6 +23,14 @@ void mem_init()
     unsigned int i;
     uint32_t addr;
 
+#ifdef NO_MEMORY_CHECK
+    mmu_mem_size = 0x40000;
+    mmu_num_banks = (int)(mmu_mem_size / 0x10000);
+    printf("Skipping memory test\r\n");
+    printf("Memory XXX, %06lXH %d KB\r\n", addr, (int)(mmu_mem_size / 1024));
+    return;
+#endif
+
 #ifdef CPM_MMU_EXERCISE
     mmu_mem_size = 0x80000;
     mmu_num_banks = (int)(mmu_mem_size / 0x10000);
