@@ -365,6 +365,7 @@ void io_handle() {
 
     // Let Z80 read the data
     set_busrq_pin(0);           // /BUSREQ is active
+    board_clear_io_event();     // Clear interrupt flag
     set_wait_pin(1);            // Release wait
     while(!ioreq_pin());        // wait for /IORQ to be cleared
     set_data_dir(0xff);         // Set as input
@@ -451,6 +452,7 @@ void io_handle() {
     // Assert /BUSREQ and release /WAIT
     //
     set_busrq_pin(0);           // /BUSREQ is active
+    board_clear_io_event();     // Clear interrupt flag
     set_wait_pin(1);            // Release wait
     while(!ioreq_pin());        // wait for /IORQ to be cleared
 
@@ -624,7 +626,6 @@ void io_handle() {
     bus_master(0);
 
  withdraw_busreq:
-    board_clear_io_event(); // Clear interrupt flag
     set_busrq_pin(1);       // /BUSREQ is deactive
 
     io_stat_ = IO_STAT_RUNNING;
@@ -645,9 +646,6 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
 
     bus_master(0);
     set_busrq_pin(1);       // /BUSREQ is deactive
-    set_wait_pin(1);        // Release wait
-    while(!ioreq_pin());    // wait for /IORQ to be cleared
-    board_clear_io_event(); // Clear interrupt flag
 
     while (1) {
         // Wait for IO access
@@ -666,14 +664,15 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
             printf("%s: %3d      (%02XH     ) ... disk_stat=%02Xh\n\r", __func__,
                    wait_io_addr, wait_io_addr, disk_stat);
             #endif
+            // Let Z80 read the data
+            set_busrq_pin(0);           // Activate /BUSRQ
             set_data_dir(0x00);         // Set as output
             set_data_pins(disk_stat);
-            // Let Z80 read the data
-            set_busrq_pin(1);           // Release /BUSREQ
-            set_wait_pin(1);            // Release wait
-            while(!ioreq_pin());        // wait for /IORQ to be cleared
             board_clear_io_event();     // Clear interrupt flag
+            set_wait_pin(1);            // Release /WAIT
+            while(!ioreq_pin());        // wait for /IORQ to be cleared
             set_data_dir(0xff);         // Set as input
+            set_busrq_pin(1);           // Release /BUSRQ
             continue;
         }
 
@@ -699,9 +698,9 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
     }
 
     set_busrq_pin(0);           // /BUSREQ is active
+    board_clear_io_event();     // Clear interrupt flag
     set_wait_pin(1);            // Release wait
     while(!ioreq_pin());        // wait for /IORQ to be cleared
-    board_clear_io_event();     // Clear interrupt flag
     bus_master(1);
 
     #ifdef CPM_IO_DEBUG
