@@ -38,11 +38,12 @@ MON_ENTER	EQU	172	; clean up monitor mode
 ;	Note: The condition bits are not affected by OUT, NOP, JP and JR instructions
 ;
 	ORG	0		; reset vector
+CLEANUP_START:
 TGTINV_GATE:
 	OUT (MON_ENTER),A
 	JR EXIT
 RESTORE_SP:			; destination of the return instruction (RETI or RETN)
-	LD SP,0000h	; restore original SP
+	LD SP,0000h		; restore original SP
 
 	DEFS	0008H - $, 0	; NOP
 	ORG	0008H		; RST 08H interrupt vector
@@ -51,6 +52,7 @@ CLEANUP_IO_ADDR EQU $ + 1
 	NOP
 JUMP_INST:
 	JP ENTRY_RST		; Restore return address by jump instruction
+CLEANUP_END:
 
 ;
 ;	program entry
@@ -84,23 +86,27 @@ EXIT:
 SET_RET_INST:
 	LD	BC,(HL)
 	LD	(RET_INST),BC	; Update the return instruction
-	LD	A,MON_CLEANUP
-	LD	(CLEANUP_IO_ADDR),A
-	LD	HL,(SAVED_SP)	; Set the origial SP + 2
-        INC	HL
-        INC	HL
-	LD	(RESTORE_SP+1),HL
-	LD	HL,(SAVED_PC)	; Set the return address
-	LD	(JUMP_INST+1),HL
-	LD	SP,SAVED_IY
-	POP	IY
-	POP	IX
-	POP	HL
-	POP	DE
-	POP	BC
-	POP	AF
-RET_INST:
-	RETN			; return to RESTORE_SP because SP is pointing to FAKE_RET_ADDR
+
+;	setup clean up code
+	LD	HL,(CLEANUP_CODE_LOCATION)
+	LD	A,L
+	OR	A,H
+	JR	Z,UPDATE_CLEANUP_CODE
+
+	LD	DE,CLEANUP_START
+	LD	B,CLEANUP_END - CLEANUP_START
+COPY_CLEANUP_CODE:
+	LD	A,(DE)
+	LD	(HL),A
+	INC	HL
+	INC	DE
+	DJNZ	COPY_CLEANUP_CODE
+
+	LD	HL,(CLEANUP_CODE_LOCATION)
+	LD	DE,RESTORE_SP
+	ADD	HL,DE
+	LD	(FAKE_RET_ADDR),HL
+	JR	UPDATE_CLEANUP_CODE
 
 ;
 ;	NMI interrupt vector
@@ -115,10 +121,30 @@ RET_INST:
 	LD	A,1
 	JR	ENTRY
 
+UPDATE_CLEANUP_CODE:
+	LD	IX,(CLEANUP_CODE_LOCATION)
+	LD	A,MON_CLEANUP
+	LD	(IX+CLEANUP_IO_ADDR),A
+	LD	HL,(SAVED_SP)	; Set the origial SP
+	LD	(IX+RESTORE_SP+1),HL
+	LD	A,(RET_INST_NORMAL)
+	LD	(IX+JUMP_INST),A
+	LD	SP,SAVED_IY
+	POP	IY
+	POP	IX
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+RET_INST:
+	RETN			; return to RESTORE_SP because SP is pointing to FAKE_RET_ADDR
+
 RET_INST_RST:
 	RETI
 RET_INST_NMI:
 	RETN
+RET_INST_NORMAL:
+	RET
 
 ;
 ;	work area
@@ -141,6 +167,8 @@ FAKE_RET_ADDR:
 SAVED_PC:
 	DEFW	0
 SAVED_SP:
+	DEFW	0
+CLEANUP_CODE_LOCATION:
 	DEFW	0
 NMI_FLAG:
 	DEFB	0
