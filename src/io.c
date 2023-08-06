@@ -532,6 +532,9 @@ void io_handle() {
             util_hexdump_sum("buf: ", disk_buf, SECTOR_SIZE);
         }
 
+        // Store disk I/O status here so that io_invoke_target_cpu() can return the status in it
+        disk_stat = DISK_ST_SUCCESS;
+
         if (disk_op == DISK_OP_DMA_READ) {
             //
             // DMA read
@@ -556,9 +559,6 @@ void io_handle() {
             // just set the read pointer to the heat of the buffer
             disk_datap = disk_buf;
         }
-
-        disk_stat = DISK_ST_SUCCESS;
-
     } else
     if (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE) {
         //
