@@ -150,7 +150,6 @@ extern void ungetch(char c);
 extern void putch_buffered(char c);
 extern drive_t drives[];
 extern const int num_drives;
-extern unsigned int io_output_chars;
 extern void io_handle(void);
 extern int cpm_disk_read(unsigned int drive, uint32_t lba, void *buf, unsigned int sectors);
 extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned int sector,

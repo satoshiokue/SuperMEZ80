@@ -50,7 +50,6 @@ drive_t drives[] = {
     { 16484 },
 };
 const int num_drives = (sizeof(drives)/sizeof(*drives));
-unsigned int io_output_chars = 0;
 static int io_stat_ = IO_STAT_INVALID;
 
 // hardware control
@@ -302,6 +301,8 @@ void io_handle() {
     static uint8_t disk_dmal = 0;
     static uint8_t disk_dmah = 0;
     static uint8_t *disk_datap = NULL;
+    static unsigned int prev_output_chars = 0;
+    static unsigned int io_output_chars = 0;
     uint8_t c;
 
     try_to_invoke_monitor();
@@ -485,6 +486,11 @@ void io_handle() {
         goto exit_bus_master;
     case MON_ENTER:
         io_stat_ = IO_STAT_INTERRUPTED;
+        // new line if some output from the target
+        if (prev_output_chars != io_output_chars) {
+            printf("\n\r");
+            prev_output_chars = io_output_chars;
+        }
         mon_enter();
         io_stat_ = IO_STAT_MONITOR;
         while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
