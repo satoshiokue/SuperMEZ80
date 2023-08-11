@@ -650,7 +650,8 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
     printf("%s: %3d      (%02XH     ) ...\n\r", __func__, wait_io_addr, wait_io_addr);
     #endif
 
-    assert(io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_INTERRUPTED ||
+    assert(io_stat() == IO_STAT_NOT_STARTED ||
+           io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_INTERRUPTED ||
            io_stat() == IO_STAT_PREPINVOKE || io_stat() == IO_STAT_MONITOR);
 
     bus_master(0);
@@ -723,7 +724,8 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
 
 void io_invoke_target_cpu_prepare(int *saved_status)
 {
-    assert(io_stat() != IO_STAT_STOPPED || io_stat() != IO_STAT_MONITOR);
+    assert(io_stat() == IO_STAT_NOT_STARTED ||
+           io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_MONITOR);
 
     if (io_stat() == IO_STAT_MONITOR) {
         *saved_status = 0;
