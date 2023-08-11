@@ -139,6 +139,8 @@ enum {
     IO_STAT_STOPPED       = 50,
     IO_STAT_RESUMING      = 60,
     IO_STAT_INTERRUPTED   = 70,
+    IO_STAT_PREPINVOKE    = 80,
+    IO_STAT_MONITOR       = 90
 };
 extern void io_init(void);
 extern int io_stat(void);

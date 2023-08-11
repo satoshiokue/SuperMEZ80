@@ -486,8 +486,10 @@ void io_handle() {
     case MON_ENTER:
         io_stat_ = IO_STAT_INTERRUPTED;
         mon_enter();
+        io_stat_ = IO_STAT_MONITOR;
         while (!mon_step_execution && mon_prompt() != MON_CMD_EXIT);
         mon_leave();
+        io_stat_ = IO_STAT_INTERRUPTED;
         goto exit_bus_master;
     case MON_CLEANUP:
         io_stat_ = IO_STAT_INTERRUPTED;
@@ -642,7 +644,8 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
     printf("%s: %3d      (%02XH     ) ...\n\r", __func__, wait_io_addr, wait_io_addr);
     #endif
 
-    assert(io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_INTERRUPTED);
+    assert(io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_INTERRUPTED ||
+           io_stat() == IO_STAT_PREPINVOKE || io_stat() == IO_STAT_MONITOR);
 
     bus_master(0);
     set_busrq_pin(1);       // /BUSREQ is deactive
@@ -714,9 +717,9 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
 
 void io_invoke_target_cpu_prepare(int *saved_status)
 {
-    assert(io_stat() != IO_STAT_STOPPED || io_stat() != IO_STAT_INTERRUPTED);
+    assert(io_stat() != IO_STAT_STOPPED || io_stat() != IO_STAT_MONITOR);
 
-    if (io_stat() == IO_STAT_INTERRUPTED) {
+    if (io_stat() == IO_STAT_MONITOR) {
         *saved_status = 0;
         return;
     }
@@ -734,12 +737,13 @@ void io_invoke_target_cpu_prepare(int *saved_status)
     #endif
     mon_prepare();          // Install the trampoline code
     io_wait_write(MON_ENTER, NULL);
-    io_stat_ = IO_STAT_INTERRUPTED;
+    io_stat_ = IO_STAT_PREPINVOKE;
 
     #ifdef CPM_IO_DEBUG
     printf("%s: mon_enter()\n\r", __func__);
     #endif
     mon_enter();            // Now we can use the trampoline
+    io_stat_ = IO_STAT_MONITOR;
 
     *saved_status = 1;
     return;
@@ -749,7 +753,7 @@ int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
 {
     uint8_t result_data;
 
-    assert(io_stat() == IO_STAT_INTERRUPTED);
+    assert(io_stat() == IO_STAT_MONITOR);
     mon_destroy_trampoline();
 
     if (code) {
@@ -771,12 +775,13 @@ void io_invoke_target_cpu_teardown(int *saved_status)
         return;
     }
 
-    assert(io_stat() == IO_STAT_INTERRUPTED);
+    assert(io_stat() == IO_STAT_MONITOR);
 
     #ifdef CPM_IO_DEBUG
     printf("%s: mon_leave()\n\r", __func__);
     #endif
     mon_leave();
+    io_stat_ = IO_STAT_INTERRUPTED;
 
     io_wait_write(MON_CLEANUP, NULL);
 
