@@ -724,12 +724,25 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
 
 void io_invoke_target_cpu_prepare(int *saved_status)
 {
+    static const unsigned char dummy_rom[] = {
+        // Dummy program, infinite HALT loop that do nothing
+        #include "dummy.inc"
+    };
+
     assert(io_stat() == IO_STAT_NOT_STARTED ||
            io_stat() == IO_STAT_STOPPED || io_stat() == IO_STAT_MONITOR);
 
+    *saved_status = io_stat();
     if (io_stat() == IO_STAT_MONITOR) {
-        *saved_status = 0;
         return;
+    }
+
+    if (io_stat() == IO_STAT_NOT_STARTED) {
+        // Start Z80 as DMA helper
+        bus_master(1);
+        __write_to_sram(0x00000, dummy_rom, sizeof(dummy_rom));
+        board_start_z80();
+        io_wait_write(TGTINV_TRAP, NULL);
     }
 
     #ifdef CPM_IO_DEBUG
@@ -753,7 +766,6 @@ void io_invoke_target_cpu_prepare(int *saved_status)
     mon_enter();            // Now we can use the trampoline
     io_stat_ = IO_STAT_MONITOR;
 
-    *saved_status = 1;
     return;
 }
 
@@ -779,7 +791,7 @@ int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
 
 void io_invoke_target_cpu_teardown(int *saved_status)
 {
-    if (*saved_status == 0) {
+    if (*saved_status == IO_STAT_MONITOR || *saved_status == IO_STAT_INVALID) {
         return;
     }
 
@@ -803,5 +815,11 @@ void io_invoke_target_cpu_teardown(int *saved_status)
     #endif
     io_stat_ = IO_STAT_STOPPED;
 
-    *saved_status = 0;  // fail safe
+    if (*saved_status == IO_STAT_NOT_STARTED) {
+        set_reset_pin(0);
+        bus_master(1);
+        io_stat_ = IO_STAT_NOT_STARTED;
+    }
+
+    *saved_status = IO_STAT_INVALID;  // fail safe
 }

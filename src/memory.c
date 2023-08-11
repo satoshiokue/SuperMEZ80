@@ -275,8 +275,15 @@ void mmu_bank_select(int bank)
     if (mmu_bank == bank)
         return;
     if (mmu_num_banks <= bank) {
-        printf("ERROR: bank %d is not available.\n\r", bank);
-        invoke_monitor = 1;
+        static unsigned char first_time = 1;
+        #if !defined(CPM_MMU_DEBUG)
+        if (first_time)
+        #endif
+        {
+            first_time = 0;
+            printf("ERROR: bank %d is not available.\n\r", bank);
+            invoke_monitor = 1;
+        }
     }
     if (mmu_bank_select_callback)
         (*mmu_bank_select_callback)(mmu_bank, bank);
