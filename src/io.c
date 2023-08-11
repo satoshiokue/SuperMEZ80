@@ -681,6 +681,7 @@ int io_wait_write(uint8_t wait_io_addr, uint8_t *result_io_data)
             printf("%s: ERROR: I/O %5s %3d, %3d (%02XH, %02XH) while waiting for %d (%02XH)\n\r",
                    __func__, rd_pin() == 0 ? "read" : "write",
                    io_addr, io_data, io_addr, io_data, wait_io_addr, wait_io_addr);
+            invoke_monitor = 1;
             break;
         }
 
@@ -752,10 +753,10 @@ int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
     mon_destroy_trampoline();
 
     if (code) {
-        __write_to_sram(0x0000, code, len);
+        __write_to_sram(phys_addr(0x0000), code, len);
     }
     if (params) {
-        __write_to_sram(0x0004, params, plen);
+        __write_to_sram(phys_addr(0x0004), params, plen);
     }
 
     // Run the code
