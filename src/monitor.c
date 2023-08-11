@@ -173,8 +173,7 @@ static void reinstall_trampoline(void)
 
 static void install_rst_vector(int bank)
 {
-    memcpy(tmp_buf[0], &trampoline[RST_VECTOR], RST_VECTOR_SIZE);
-    __write_to_sram(bank_phys_addr(bank, RST_VECTOR), tmp_buf[0], RST_VECTOR_SIZE);
+    __write_to_sram(bank_phys_addr(bank, RST_VECTOR), &trampoline[RST_VECTOR], RST_VECTOR_SIZE);
 }
 
 static void bank_select_callback(int from, int to)
@@ -1072,8 +1071,8 @@ void mon_cleanup(void)
     if (z80_context.w.cleanup_code_location == 0x0000) {
         // Use modified RST 08h vector to return to original NMI return addess
         install_rst_vector(mmu_bank);
-        tmp_buf[0][0] = 0xc9;  // Z80 RET instruction
-        __write_to_sram(phys_addr(0x000b), &tmp_buf[0], 1);
+        static const char return_instruction[] = { 0xc9 };  // Z80 RET instruction
+        __write_to_sram(phys_addr(0x000b), return_instruction, sizeof(return_instruction));
     }
 
     if (mon_step_execution) {
