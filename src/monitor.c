@@ -409,9 +409,10 @@ int mon_cmd_clearbreakpoint(int argc, char *args[]);
 int mon_cmd_continue(int argc, char *args[]);
 int mon_cmd_reset(int argc, char *args[]);
 int mon_cmd_set(int argc, char *args[]);
+int mon_cmd_write(int argc, char *args[]);
 
 #define MON_MAX_ARGS 4
-#define MON_STR_ARG1 (1 << 0)
+#define MON_STR_ARG(n) (1 << (n))
 static const struct {
     const char *name;
     uint8_t nargs;
@@ -427,9 +428,10 @@ static const struct {
     { "dump",           2, mon_cmd_dump              },
     { "reset",          0, mon_cmd_reset             },
     { "sdread",         2, mon_cmd_sdread            },
-    { "set",            2, mon_cmd_set,              MON_STR_ARG1   },
+    { "set",            2, mon_cmd_set,              MON_STR_ARG(0) },
     { "step",           1, mon_cmd_step              },
     { "status",         0, mon_cmd_status            },
+    { "write",          2, mon_cmd_write,            MON_STR_ARG(1) },
     { "help",           0, mon_cmd_help              },
 };
 #define MON_INVALID_CMD_INDEX UTIL_ARRAYSIZEOF(mon_cmds)
@@ -446,9 +448,79 @@ void mon_remove_trailing_space(char **linep)
         *((*linep)++) = '\0';
 }
 
+int mon_chartoval(char **strp, uint8_t *valp)
+{
+    uint8_t res;
+    uint8_t val;
+    char *str;
+    static char *curptr;
+
+    if (strp != NULL) {
+        str = *strp;
+    } else {
+        str = curptr;
+    }
+
+    if (str == NULL || str[0] == '\0') {
+        res = 0;  // no more value
+        goto exit;
+    }
+
+    if (str[0] == '\'') {
+        res = 0;  // no more value
+        str++;
+        goto exit;
+    }
+
+    if (str[0] != '\\') {
+        val = str[0] & 0xff;
+        str++;
+        res = 1;
+        goto exit;
+    }
+
+    if (str[1] == '\0') {
+        res = 0;
+        str++;
+        goto exit;
+    }
+    switch (str[1]) {
+    case '\\': val = '\\'; break;
+    case '\'': val = '\''; break;
+    case '\"': val = '\"'; break;
+    case 't':  val = '\t'; break;
+    case 'n':  val = '\n'; break;
+    case 'r':  val = '\r'; break;
+    default:   val = str[1]; break;
+    }
+
+    str += 2;
+    res = 1;
+
+ exit:
+    if (valp)
+        *valp = val;
+    if (strp)
+        *strp = str;
+    curptr = str;
+
+    return res;
+}
+
 int mon_get_str(char **linep)
 {
     int result = 0;
+
+    if (**linep == '\'') {
+        char *tmpp = ++(*linep);
+        while (mon_chartoval(linep, NULL)) {
+            // nothing to do
+        }
+        result =  *linep - tmpp;
+        mon_remove_trailing_space(linep);
+
+        return result;
+    }
 
     while (1) {
         char c = **linep;
@@ -486,12 +558,25 @@ int mon_get_hexval(char **linep)
 
 uint32_t mon_strtoval(char *str)
 {
+    static char *null_str = { 0 };
+    mon_chartoval(&null_str, NULL);
+
     if (str[0] == '\0')
         return 0;
     if (str[0] == '0' && str[1] == 'x')
         return strtoul(&str[2], NULL, 16);;
     if (str[strlen(str) - 1] == 'h' || str[strlen(str) - 1] == 'H')
         return strtoul(str, NULL, 16);;
+    if (str[0] == '\'') {
+        uint8_t res;
+        char *tmpp;
+        tmpp = &str[1];
+        if (mon_chartoval(&tmpp, &res))
+            return res;
+        else
+            return '\'';  // error
+    }
+
     return strtoul(str, NULL, 10);;
 }
 
@@ -553,7 +638,7 @@ int mon_parse(char *line, unsigned int *command, char *args[MON_MAX_ARGS])
     for (i = 0; i < mon_cmds[match_idx].nargs; i++) {
         mon_remove_space(&line);
         args[i] = line;
-        if (i == 0 && (mon_cmds[match_idx].flags & MON_STR_ARG1)) {
+        if (mon_cmds[match_idx].flags & MON_STR_ARG(i)) {
             if (mon_get_str(&line) == 0 && *line == '\0') {
                 // reach end of the line without any argument
                 args[i] = NULL;
@@ -905,6 +990,30 @@ int mon_cmd_set(int argc, char *args[])
         printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint16_t*)ptr, *(uint16_t*)ptr);
     else
         printf("%s=%d (%Xh)\n\r", variables[i].name, *(uint8_t*)ptr, *(uint8_t*)ptr);
+
+    return MON_CMD_OK;
+}
+
+int mon_cmd_write(int argc, char *args[])
+{
+    uint32_t addr = mon_cur_addr;
+    uint8_t val;
+
+    if (args[0] != NULL && *args[0] != '\0')
+        addr = mon_strtoval(args[0]);
+    if (args[1] == NULL || *args[1] == '\0') {
+        printf("write [addr],val\n\r");
+        return MON_CMD_OK;
+    }
+
+    val = (uint8_t)mon_strtoval(args[1]);
+    dma_write_to_sram(addr, &val, 1);
+    addr++;
+    while (mon_chartoval(NULL, &val)) {
+        dma_write_to_sram(addr, &val, 1);
+        addr++;
+    }
+    mon_cur_addr = addr;
 
     return MON_CMD_OK;
 }
