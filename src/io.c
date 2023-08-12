@@ -740,8 +740,9 @@ void io_invoke_target_cpu_prepare(int *saved_status)
     if (io_stat() == IO_STAT_NOT_STARTED) {
         // Start Z80 as DMA helper
         bus_master(1);
-        __write_to_sram(0x00000, dummy_rom, sizeof(dummy_rom));
+        __write_to_sram(bank_phys_addr(0, 0x00000), dummy_rom, sizeof(dummy_rom));
         board_start_z80();
+        set_bank_pins(bank_phys_addr(0, 0x00000));
         io_wait_write(TGTINV_TRAP, NULL);
     }
 
@@ -769,18 +770,19 @@ void io_invoke_target_cpu_prepare(int *saved_status)
     return;
 }
 
-int io_invoke_target_cpu(const void *code, unsigned int len, const void *params, unsigned int plen)
+int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
+                         unsigned int plen, int bank)
 {
     uint8_t result_data;
 
     assert(io_stat() == IO_STAT_MONITOR);
-    mon_destroy_trampoline();
+    mon_use_zeropage(bank);
 
     if (code) {
-        __write_to_sram(phys_addr(0x0000), code, len);
+        __write_to_sram(bank_phys_addr(bank, 0x0000), code, len);
     }
     if (params) {
-        __write_to_sram(phys_addr(0x0004), params, plen);
+        __write_to_sram(bank_phys_addr(bank, 0x0004), params, plen);
     }
 
     // Run the code

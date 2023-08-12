@@ -111,7 +111,7 @@ void mem_init()
 
 #define memcpy_on_target_buf 0x80
 #define memcpy_on_target_buf_size 0x80
-static void __memcpy_on_target(uint16_t dest, uint16_t src, unsigned int len)
+static void __memcpy_on_target(uint16_t dest, uint16_t src, unsigned int len, int bank)
 {
     static const unsigned char dma_helper_z80[] = {
         #include "dma_helper.inc"
@@ -131,7 +131,7 @@ static void __memcpy_on_target(uint16_t dest, uint16_t src, unsigned int len)
     params.src_addr = src;
     params.dest_addr = dest;
     params.length = (uint8_t)len;
-    io_invoke_target_cpu(dma_helper_z80, sizeof(dma_helper_z80), &params, sizeof(params));
+    io_invoke_target_cpu(dma_helper_z80, sizeof(dma_helper_z80), &params, sizeof(params), bank);
 }
 
 static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int len)
@@ -140,6 +140,7 @@ static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int 
     uint16_t addr = (uint16_t)(dest & 0xffff);
     unsigned int n;
     int saved_io_status;
+    int bank = phys_addr_bank(dest);
 
     #ifdef CPM_MEMCPY_DEBUG
     printf("%22s: addr=  %04X, len=%4u\n\r", __func__, addr, len);
@@ -157,7 +158,7 @@ static void write_to_sram_low_addr(uint32_t dest, const void *buf, unsigned int 
         set_data_dir(0x00);     // Set as output to write to the SRAM
         board_write_to_sram(memcpy_on_target_buf, (uint8_t*)buf, n);
         board_setup_addrbus(dest & 0xffff0000);
-        __memcpy_on_target(addr, memcpy_on_target_buf, n);
+        __memcpy_on_target(addr, memcpy_on_target_buf, n, bank);
         board_setup_addrbus(dest);
         len -= n;
         addr += n;
@@ -194,6 +195,7 @@ static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
     uint16_t addr = (uint16_t)(src & 0xffff);
     unsigned int n;
     int saved_io_status;
+    int bank = phys_addr_bank(src);
 
     #ifdef CPM_MEMCPY_DEBUG
     printf("%22s: addr=  %04X, len=%4u\n\r", __func__, addr, len);
@@ -208,7 +210,7 @@ static void read_from_sram_low_addr(uint32_t src, void *buf, unsigned int len)
     while (0 < len) {
         n = UTIL_MIN(memcpy_on_target_buf_size, len);
         board_setup_addrbus(src & 0xffff0000);
-        __memcpy_on_target(memcpy_on_target_buf, addr, n);
+        __memcpy_on_target(memcpy_on_target_buf, addr, n, bank);
         board_setup_addrbus(src & 0xffff0000);
         set_data_dir(0xff);     // Set as input to read from the SRAM
         board_read_from_sram(memcpy_on_target_buf, (uint8_t*)buf, n);

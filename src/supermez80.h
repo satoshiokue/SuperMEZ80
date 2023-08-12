@@ -158,7 +158,7 @@ extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned
                                uint32_t lba);
 extern void io_invoke_target_cpu_prepare(int *saved_status);
 extern int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
-                               unsigned int plen);
+                                unsigned int plen, int bank);
 extern void io_invoke_target_cpu_teardown(int *saved_status);
 
 // monitor
@@ -171,7 +171,7 @@ void mon_setup(void);
 void mon_prepare(void);
 void mon_enter(void);
 int mon_prompt(void);
-void mon_destroy_trampoline(void);
+void mon_use_zeropage(int bank);
 void mon_leave(void);
 void mon_cleanup(void);
 
@@ -185,6 +185,7 @@ extern void (*mmu_bank_config_callback)(void);
 extern void mem_init(void);
 #define bank_phys_addr(bank, addr) (((uint32_t)(bank) << 16) + (addr))
 #define phys_addr(addr) bank_phys_addr(mmu_bank, (addr))
+#define phys_addr_bank(addr) ((int)((addr) >> 16))
 extern void set_bank_pins(uint32_t addr);
 extern void dma_write_to_sram(uint32_t dest, const void *buf, unsigned int len);
 extern void dma_read_from_sram(uint32_t src, void *buf, unsigned int len);

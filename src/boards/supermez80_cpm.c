@@ -214,9 +214,6 @@ static void supermez80_cpm_bus_master(int enable)
         TRIS(Z80_RD) = 0;           // output
         TRIS(Z80_WR) = 0;           // output
     } else {
-        // restore bank pins
-        set_bank_pins((uint32_t)mmu_bank << 16);
-
         // Set address bus as input
         TRIS(Z80_ADDR_L) = 0xff;    // A7-A0
         TRIS(Z80_A14) = 1;

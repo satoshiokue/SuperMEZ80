@@ -174,9 +174,6 @@ static void supermez80_spi_release_addrbus(void)
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A14, MCP23S08_PINMODE_INPUT);
     mcp23s08_pinmode(MCP23S08_ctx, GPIO_A15, MCP23S08_PINMODE_INPUT);
 
-    // higher address lines must always be driven by MCP23S08
-    set_bank_pins((uint32_t)mmu_bank << 16);
-
     #ifdef GPIO_LED
     mcp23s08_write(MCP23S08_ctx, GPIO_LED, turn_on_io_len ? 0 : 1);
     #endif

@@ -162,13 +162,25 @@ static void install_trampoline(int bank)
 
 static void reinstall_trampoline(void)
 {
-    if (trampoline_installed == MMU_INVALID_BANK || !trampoline_destroyed)
+    if (trampoline_installed == mmu_bank && !trampoline_destroyed) {
         return;
-    __write_to_sram(bank_phys_addr(trampoline_installed, ZERO_PAGE), trampoline,
-                    sizeof(trampoline));
+    }
+    if (trampoline_installed != mmu_bank) {
+        install_trampoline(mmu_bank);
+    } else {
+        __write_to_sram(bank_phys_addr(mmu_bank, ZERO_PAGE), trampoline, sizeof(trampoline));
+    }
     __write_to_sram(bank_phys_addr(trampoline_installed, trampoline_work), &z80_context.w,
                     sizeof(z80_context.w));
     trampoline_destroyed = 0;
+}
+
+void mon_use_zeropage(int bank)
+{
+    if (trampoline_installed != bank) {
+        install_trampoline(bank);
+    }
+    trampoline_destroyed = 1;
 }
 
 static void install_rst_vector(int bank)
@@ -1048,16 +1060,15 @@ int mon_prompt(void)
     return result;
 }
 
-void mon_destroy_trampoline(void)
-{
-    trampoline_destroyed = 1;
-}
-
 void mon_leave(void)
 {
     // printf("Leave monitor\n\r");
 
     reinstall_trampoline();
+
+    // restore bank pins
+    set_bank_pins((uint32_t)mmu_bank << 16);
+
     set_nmi_pin(1);
 }
 
