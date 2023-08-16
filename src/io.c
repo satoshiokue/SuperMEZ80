@@ -770,23 +770,27 @@ void io_invoke_target_cpu_prepare(int *saved_status)
     return;
 }
 
-int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
-                         unsigned int plen, int bank)
+int io_invoke_target_cpu(const param_block_t *inparams, unsigned int ninparams,
+                         const param_block_t *outparams, unsigned int noutparams, int bank)
 {
+    int i;
     uint8_t result_data;
 
     assert(io_stat() == IO_STAT_MONITOR);
     mon_use_zeropage(bank);
 
-    if (code) {
-        __write_to_sram(bank_phys_addr(bank, 0x0000), code, len);
-    }
-    if (params) {
-        __write_to_sram(bank_phys_addr(bank, 0x0004), params, plen);
+    for (i = 0; i < ninparams; i++) {
+        __write_to_sram(bank_phys_addr(bank, inparams[i].offs), inparams[i].addr,
+                        inparams[i].len);
     }
 
     // Run the code
     io_wait_write(TGTINV_TRAP, &result_data);
+
+    for (i = 0; i < noutparams; i++) {
+        __read_from_sram(bank_phys_addr(bank, outparams[i].offs), outparams[i].addr,
+                         outparams[i].len);
+    }
 
     return (int)(signed char)result_data;
 }

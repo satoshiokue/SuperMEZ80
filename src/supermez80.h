@@ -119,6 +119,12 @@ typedef struct {
     uint16_t disk_mask;
 } debug_t;
 
+typedef struct {
+    uint8_t *addr;
+    uint16_t offs;
+    unsigned int len;
+} param_block_t;
+
 //
 // Global variables and function prototypes
 //
@@ -157,8 +163,8 @@ extern int cpm_trsect_to_lba(unsigned int drive, unsigned int track, unsigned in
 extern int cpm_trsect_from_lba(unsigned int drive, unsigned int *track, unsigned int *sector,
                                uint32_t lba);
 extern void io_invoke_target_cpu_prepare(int *saved_status);
-extern int io_invoke_target_cpu(const void *code, unsigned int len, const void *params,
-                                unsigned int plen, int bank);
+extern int io_invoke_target_cpu(const param_block_t *inparams, unsigned int ninparams,
+                                const param_block_t *outparams, unsigned int noutparams, int bank);
 extern void io_invoke_target_cpu_teardown(int *saved_status);
 
 // monitor
