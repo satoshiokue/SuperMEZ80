@@ -322,8 +322,8 @@ void io_handle() {
             set_data_pins(*disk_datap++);
         } else
         if (DEBUG_DISK) {
-            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (READ IGNORED)\n\r",
-                   disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%01x%02x%02x (RD IGNORED)\n\r",
+                   disk_op, disk_drive, disk_track, disk_sector, mmu_bank, disk_dmah, disk_dmal);
         }
         break;
     case DISK_REG_FDCST:
@@ -372,11 +372,10 @@ void io_handle() {
             if (DISK_OP_WRITE == DISK_OP_WRITE && (disk_datap - disk_buf) == SECTOR_SIZE) {
                 do_bus_master = 1;
             }
-        } else {
-            if (DEBUG_DISK) {
-                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x (IGNORED)\n\r",
-                       disk_op, disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
-            }
+        } else
+        if (DEBUG_DISK) {
+            printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%01x%02x%02x (WR IGNORED)\n\r",
+                   disk_op, disk_drive, disk_track, disk_sector, mmu_bank, disk_dmah, disk_dmal);
         }
         break;
     case DISK_REG_DRIVE:
@@ -400,9 +399,10 @@ void io_handle() {
         }
         if ((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
             (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) {
-            if (DEBUG_DISK_VERBOSE) {
-                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%02x%02x ... \n\r", disk_op,
-                       disk_drive, disk_track, disk_sector, disk_dmah, disk_dmal);
+            if (DEBUG_DISK_VERBOSE && !(debug.disk_mask & (1 << disk_drive))) {
+                printf("DISK: OP=%02x D/T/S=%d/%3d/%3d            ADDR=%01x%02x%02x ... \n\r",
+                       disk_op, disk_drive, disk_track, disk_sector,
+                       mmu_bank, disk_dmah, disk_dmal);
             }
         }
         break;
@@ -591,9 +591,9 @@ void io_handle() {
     if (((DEBUG_DISK_READ  && (disk_op == DISK_OP_DMA_READ  || disk_op == DISK_OP_READ )) ||
          (DEBUG_DISK_WRITE && (disk_op == DISK_OP_DMA_WRITE || disk_op == DISK_OP_WRITE))) &&
         !(debug.disk_mask & (1 << disk_drive))) {
-        printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%02x%02x ... ST=%02x\n\r", disk_op,
-               disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
-               disk_dmah, disk_dmal, disk_stat);
+        printf("DISK: OP=%02x D/T/S=%d/%3d/%3d x%3d=%5ld ADDR=%01x%02x%02x ... ST=%02x\n\r",
+               disk_op, disk_drive, disk_track, disk_sector, drives[disk_drive].sectors, sector,
+               mmu_bank, disk_dmah, disk_dmal, disk_stat);
     }
 
     turn_on_io_led = 0;
