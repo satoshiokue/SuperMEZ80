@@ -88,5 +88,8 @@ test_repeat::
           PORT=$(CONSPORT) test/test.sh || exit 1; \
         done
 
+test_time::
+	PORT=$(CONSPORT) test/measure_time.sh
+
 clean::
 	rm -rf $(BUILD_DIR)
