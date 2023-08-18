@@ -33,6 +33,16 @@
 #define SPI_MODE2 2
 #define SPI_MODE3 3
 
+enum {
+    SPI_CLOCK_100KHZ,
+    SPI_CLOCK_2MHZ,
+    SPI_CLOCK_4MHZ,
+    SPI_CLOCK_5MHZ,
+    SPI_CLOCK_6MHZ,
+    SPI_CLOCK_8MHZ,
+    SPI_CLOCK_10MHZ,
+};
+
 #define __SPI_C(a, b) a ## _ ## b
 #define SPI_C(a, b) __SPI_C(a, b)
 #define SPI(a) SPI_C(SPI_PREFIX, a)
@@ -42,7 +52,7 @@ struct SPI {
 };
 
 void SPI(begin)(struct SPI *ctx_);
-void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bitOrder, uint8_t dataMode);
+void SPI(configure)(struct SPI *ctx_, int clock_speed, uint8_t bitOrder, uint8_t dataMode);
 void SPI(begin_transaction)(struct SPI *ctx_);
 uint8_t SPI(transfer_byte)(struct SPI *ctx_, uint8_t output);
 void SPI(transfer)(struct SPI *ctx_, void *buf, unsigned int count);

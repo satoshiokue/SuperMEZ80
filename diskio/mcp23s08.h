@@ -24,7 +24,7 @@
 #ifndef __MCP23S08_H__
 #define __MCP23S08_H__
 
-#include <SPI.h>
+#include <stdint.h>
 
 struct MCP23S08;
 extern struct MCP23S08 *MCP23S08_ctx;
@@ -32,8 +32,8 @@ extern struct MCP23S08 *MCP23S08_ctx;
 #define MCP23S08_PINMODE_OUTPUT 0
 #define MCP23S08_PINMODE_INPUT  1
 
-void mcp23s08_init(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr);
-int mcp23s08_probe(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr);
+void mcp23s08_init(struct MCP23S08 *ctx, int clock_speed, uint8_t addr);
+int mcp23s08_probe(struct MCP23S08 *ctx, int clock_speed, uint8_t addr);
 int mcp23s08_is_alive(struct MCP23S08 *ctx);
 int mcp23s08_set_pending(struct MCP23S08 *ctx, int pending);
 void mcp23s08_pinmode(struct MCP23S08 *ctx, int gpio, int mode);

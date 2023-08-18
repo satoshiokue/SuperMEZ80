@@ -50,15 +50,25 @@ void SPI(begin)(struct SPI *ctx_)
     SPI(CS_TRIS) = 0;  // Set as output
 }
 
-void SPI(configure)(struct SPI *ctxx2, uint16_t clock_delay, uint8_t bit_order, uint8_t data_mode)
+void SPI(configure)(struct SPI *ctxx2, int clock_speed, uint8_t bit_order, uint8_t data_mode)
 {
     struct SPI_SW *ctx = (struct SPI_SW *)ctxx2;
     ctx->clk_phase = (data_mode & 1);  // clock phase (CPHA)
     ctx->clk_polarity = (data_mode & 2);  // clock polarity (CPOL)
     ctx->bit_order = bit_order;
-    ctx->clock_delay = clock_delay;
+    switch (clock_speed) {
+    case SPI_CLOCK_100KHZ:
+        ctx->clock_delay = 10;  // Determined by actual measurement at PIC 18F47Q43@64MHz
+        break;
+    case SPI_CLOCK_2MHZ:
+        ctx->clock_delay = 0;   // Maximum speed w/o any wait (1~2 MHz)
+        break;
+    default:
+        printf("%s: ERROR: clock speed %d is not supported\n\r", __func__, clock_speed);
+        break;
+    }
 
-    if (data_mode == SPI_MODE0 && bit_order == SPI_MSBFIRST && clock_delay == 0) {
+    if (data_mode == SPI_MODE0 && bit_order == SPI_MSBFIRST && ctx->clock_delay == 0) {
         ctx->send = SPI(send_mode0_msbfirst_nowait);
         ctx->receive = SPI(receive_mode0_msbfirst_nowait);
     } else {

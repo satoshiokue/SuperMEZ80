@@ -33,7 +33,6 @@ struct SPI_HW {
     struct SPI spi;
     uint8_t bus_acquired;
     uint8_t tris;
-    uint16_t clock_delay;
 };
 static struct SPI_HW pic18f47q43_spi_ctx = { 0 };
 struct SPI *SPI(ctx) = (struct SPI *)&pic18f47q43_spi_ctx;
@@ -86,10 +85,9 @@ void SPI(begin)(struct SPI *ctx_)
     SPIx(CON0bits).EN = 1;              // Enable SPI
 }
 
-void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bit_order, uint8_t data_mode)
+void SPI(configure)(struct SPI *ctx_, int clock_speed, uint8_t bit_order, uint8_t data_mode)
 {
     struct SPI_HW *ctx = (struct SPI_HW *)ctx_;
-    ctx->clock_delay = clock_delay;
 
     SPIx(CON0bits).MST = 1;     // Host mode
     SPIx(CON0bits).BMODE = 1;   // Byte transfer mode
@@ -109,19 +107,37 @@ void SPI(configure)(struct SPI *ctx_, uint16_t clock_delay, uint8_t bit_order, u
         SPIx(CON1bits).CKE = 1; // Output data changes on transition from Active to Idle clock state
         SPIx(CON1bits).CKP = 0; // Idle state for SCK is low level
     } else {
-        printf("%s: ERROR: mode %d is not supported\n\r", __FILE__, data_mode);
+        printf("%s: ERROR: mode %d is not supported\n\r", __func__, data_mode);
         while (1);
     }
 
-    if (clock_delay == 0) {
-        SPIx(CLK) = 0;      // FOSC (System Clock)
-        //SPIx(BAUD) = 3;     // 64 MHz / 2 * ( 3 + 1) = 8.0 MHz
-        //SPIx(BAUD) = 4;     // 64 MHz / 2 * ( 4 + 1) = 6.4 MHz
-        SPIx(BAUD) = 5;     // 64 MHz / 2 * ( 5 + 1) = 5.3 MHz
-        //SPIx(BAUD) = 7;     // 64 MHz / 2 * ( 5 + 1) = 4.0 MHz
-    } else {
+    SPIx(CLK) = 0;      // FOSC (System Clock)
+    switch (clock_speed) {
+    case SPI_CLOCK_100KHZ:
         SPIx(CLK) = 2;      // MFINTOSC (500 kHz)
-        SPIx(BAUD) = 2;     // 500 kHz / 2 * ( 2 + 1) = 83 kHz
+        SPIx(BAUD) = 2;     // 500 kHz / (2 * ( 2 + 1)) = 83 kHz
+        break;
+    case SPI_CLOCK_2MHZ:
+        SPIx(BAUD) = 15;    // 64 MHz / (2 * (15 + 1)) = 2.0 MHz
+        break;
+    case SPI_CLOCK_4MHZ:
+        SPIx(BAUD) = 7;     // 64 MHz / (2 * ( 7 + 1)) = 4.0 MHz
+        break;
+    case SPI_CLOCK_5MHZ:
+        SPIx(BAUD) = 5;     // 64 MHz / (2 * ( 5 + 1)) = 5.3 MHz
+        break;
+    case SPI_CLOCK_6MHZ:
+        SPIx(BAUD) = 4;     // 64 MHz / (2 * ( 4 + 1)) = 6.4 MHz
+        break;
+    case SPI_CLOCK_8MHZ:
+        SPIx(BAUD) = 3;     // 64 MHz / (2 * ( 3 + 1)) = 8.0 MHz
+        break;
+    case SPI_CLOCK_10MHZ:
+        SPIx(BAUD) = 2;     // 64 MHz / (2 * ( 2 + 1)) = 10.7 MHz
+        break;
+    default:
+        printf("%s: ERROR: clock speed %d is not supported\n\r", __func__, clock_speed);
+        break;
     }
 }
 

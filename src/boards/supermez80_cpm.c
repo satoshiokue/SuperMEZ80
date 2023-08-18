@@ -31,6 +31,7 @@
 
 #define SPI_PREFIX      SPI_SD
 #define SPI_HW_INST     SPI2
+#include <SPI.h>
 
 #define Z80_IOREQ       A0
 #define Z80_MEMRQ       A1
@@ -190,7 +191,7 @@ static void supermez80_cpm_sys_init()
             printf("No SD Card?\n\r");
             while(1);
         }
-        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
+        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_5MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
             break;
         __delay_ms(200);
     }

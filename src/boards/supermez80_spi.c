@@ -32,6 +32,10 @@
 #include <mcp23s08.h>
 #include <picregister.h>
 
+#define SPI_PREFIX SPI_SD
+#define SPI_HW_INST SPI1
+#include <SPI.h>
+
 #define Z80_DATA        C
 #define Z80_ADDR_H      D
 #define Z80_ADDR_L      B
@@ -159,7 +163,7 @@ static void supermez80_spi_sys_init()
             printf("No SD Card?\n\r");
             while(1);
         }
-        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
+        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_5MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
             break;
         __delay_ms(200);
     }
@@ -401,8 +405,6 @@ void board_init()
     board_set_wait_pin_hook  = supermez80_spi_set_wait_pin;
 }
 
-#define SPI_PREFIX SPI_SD
-#define SPI_HW_INST SPI1
 #define SPI_USE_MCP23S08
 #include <pic18f47q43_spi.c>
 #include <SDCard.c>

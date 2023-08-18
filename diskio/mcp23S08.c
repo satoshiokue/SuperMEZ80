@@ -39,7 +39,6 @@ static struct MCP23S08 {
     struct SPI *spi;
     int alive;
     int pending;
-    uint16_t clock_delay;
     uint8_t addr;
     uint8_t dir;
     uint8_t olat;
@@ -100,17 +99,16 @@ static void mcp23S08_reg_write(struct MCP23S08 *ctx, uint8_t reg, uint8_t val)
     SPI(end_transaction)(spi);
 }
 
-void mcp23s08_init(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr)
+void mcp23s08_init(struct MCP23S08 *ctx, int clock_speed, uint8_t addr)
 {
     ctx->spi = SPI(ctx);
-    ctx->clock_delay = clock_delay;
     ctx->addr = addr;
     ctx->dir = 0xff;  // all ports are setup as input
     ctx->olat = 0;
     dprintf(("\n\rMCP23S08: initialize ...\n\r"));
 
     SPI(begin)(ctx->spi);
-    SPI(configure)(ctx->spi, clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(configure)(ctx->spi, clock_speed, SPI_MSBFIRST, SPI_MODE0);
 
     ctx->pending = 0;
     mcp23S08_reg_write(ctx, REG_IODIR, ctx->dir);
@@ -121,7 +119,7 @@ void mcp23s08_init(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr)
     ctx->alive = 1;
 }
 
-int mcp23s08_probe(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr)
+int mcp23s08_probe(struct MCP23S08 *ctx, int clock_speed, uint8_t addr)
 {
     int result;
     uint8_t saved_iodir, saved_gppu, saved_olat;
@@ -140,7 +138,7 @@ int mcp23s08_probe(struct MCP23S08 *ctx, uint16_t clock_delay, uint8_t addr)
         { REG_OLAT, 0xff },
     };
 
-    mcp23s08_init(ctx, clock_delay, addr);
+    mcp23s08_init(ctx, clock_speed, addr);
 
     saved_iodir = mcp23S08_reg_read(ctx, REG_IODIR);
     saved_gppu = mcp23S08_reg_read(ctx, REG_GPPU);

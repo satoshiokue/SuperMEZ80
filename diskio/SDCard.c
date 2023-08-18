@@ -39,7 +39,6 @@ static const int debug_flags = 0;
 
 static struct SDCard {
     struct SPI *spi;
-    uint16_t clock_delay;
     uint16_t timeout;
     unsigned int calc_read_crc :1;
 } ctx_ = { 0 };
@@ -51,10 +50,9 @@ void SDCard_end_transaction()
     SPI(dummy_clocks)(spi, 1);
 }
 
-int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t timeout)
+int SDCard_init(int initial_clock_speed, int clock_speed, uint16_t timeout)
 {
     ctx_.spi = SPI(ctx);
-    ctx_.clock_delay = clock_delay;
     ctx_.timeout = timeout;
     ctx_.calc_read_crc = 0;
     struct SPI *spi = ctx_.spi;
@@ -63,7 +61,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
     uint8_t buf[5];
     dprintf(("\n\rSD Card: initialize ...\n\r"));
 
-    SPI(configure)(spi, initial_clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(configure)(spi, initial_clock_speed, SPI_MSBFIRST, SPI_MODE0);
     SPI(begin_transaction)(spi);
     SPI(dummy_clocks)(spi, 10);
     SDCard_end_transaction();
@@ -125,7 +123,7 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
         return SDCARD_BADRESPONSE;
     }
 
-    SPI(configure)(spi, ctx_.clock_delay, SPI_MSBFIRST, SPI_MODE0);
+    SPI(configure)(spi, clock_speed, SPI_MSBFIRST, SPI_MODE0);
 
     dprintf(("SD Card: initialize ... succeeded\n\r"));
 
