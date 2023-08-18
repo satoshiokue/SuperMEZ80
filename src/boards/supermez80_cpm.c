@@ -105,6 +105,11 @@ static void supermez80_cpm_sys_init()
     PPS(BANK0) = 0x00;          // unbind with CLC
     PPS(BANK1) = 0x00;          // unbind with CLC
 
+    // SPI data and clock pins slew at maximum rate
+    SLRCON(SPI_SD_PICO) = 0;
+    SLRCON(SPI_SD_CLK) = 0;
+    SLRCON(SPI_SD_POCI) = 0;
+
 #ifdef SUPERMEZ80_CPM_MMU
     // CLC input pin assign
     CLCIN0PPS = PPS_IN(Z80_IOREQ);  // Port A or C can be specified
@@ -191,7 +196,7 @@ static void supermez80_cpm_sys_init()
             printf("No SD Card?\n\r");
             while(1);
         }
-        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_5MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
+        if (SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_8MHZ, /* timeout */ 100) == SDCARD_SUCCESS)
             break;
         __delay_ms(200);
     }
