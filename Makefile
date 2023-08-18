@@ -19,14 +19,14 @@ TEST_REPEAT := 10
 
 PJ_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 FATFS_DIR := $(PJ_DIR)/../FatFs
-DISKIO_DIR := $(PJ_DIR)/diskio
+DRIVERS_DIR := $(PJ_DIR)/drivers
 SRC_DIR := $(PJ_DIR)/src
 BUILD_DIR := $(PJ_DIR)/build
 CPM2_DIR := $(PJ_DIR)/cpm2
 
 FATFS_SRCS := $(FATFS_DIR)/source/ff.c
 DISK_SRCS := \
-    $(DISKIO_DIR)/diskio.c $(DISKIO_DIR)/utils.c
+    $(DRIVERS_DIR)/diskio.c $(DRIVERS_DIR)/utils.c
 SRCS := $(SRC_DIR)/supermez80.c $(SRC_DIR)/disas.c $(SRC_DIR)/disas_z80.c $(SRC_DIR)/memory.c \
     $(SRC_DIR)/monitor.c $(SRC_DIR)/io.c $(SRC_DIR)/board.c
 
@@ -38,17 +38,18 @@ ifeq ($(BOARD),SUPERMEZ80_CPM)
 SRCS += $(SRC_DIR)/boards/supermez80_cpm.c
 endif
 
-INCS :=-I$(SRC_DIR) -I$(DISKIO_DIR) -I$(FATFS_DIR)/source -I$(BUILD_DIR)
+INCS :=-I$(SRC_DIR) -I$(DRIVERS_DIR) -I$(FATFS_DIR)/source -I$(BUILD_DIR)
 
 HDRS := $(SRC_DIR)/supermez80.h $(SRC_DIR)/picconfig.h \
-        $(DISKIO_DIR)/SPI.c $(DISKIO_DIR)/SPI.h $(DISKIO_DIR)/SDCard.h $(DISKIO_DIR)/mcp23s08.h \
+        $(DRIVERS_DIR)/SPI.c $(DRIVERS_DIR)/SPI.h $(DRIVERS_DIR)/SDCard.h \
+        $(DRIVERS_DIR)/mcp23s08.h \
         $(SRC_DIR)/disas.h $(SRC_DIR)/disas_z80.h \
         $(BUILD_DIR)/ipl.inc $(BUILD_DIR)/trampoline.inc $(BUILD_DIR)/mmu_exercise.inc \
         $(BUILD_DIR)/dma_helper.inc \
         $(BUILD_DIR)/dummy.inc \
-        $(DISKIO_DIR)/pic18f47q43_spi.c \
-        $(DISKIO_DIR)/SDCard.c \
-        $(DISKIO_DIR)/mcp23s08.c \
+        $(DRIVERS_DIR)/pic18f47q43_spi.c \
+        $(DRIVERS_DIR)/SDCard.c \
+        $(DRIVERS_DIR)/mcp23s08.c \
         $(SRC_DIR)/boards/emuz80_common.c
 
 all: $(BUILD_DIR)/supermez80.hex $(BUILD_DIR)/drivea.dsk
