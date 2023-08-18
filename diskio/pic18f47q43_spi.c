@@ -202,14 +202,68 @@ void SPI(receive)(struct SPI *ctx_, void *buf, unsigned int count)
     SPIx(TCNTH) = (count >> 8);
     SPIx(TCNTL) = (count & 0xff);
 
-    SPIx(TXB) = 0xff;
-    for (int i = 1; i < count; i++) {
+    if ((count & 0x07) || 255 < count / 8) {
+        SPIx(TXB) = 0xff;
+        for (int i = 1; i < count; i++) {
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+        }
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+    } else {
+        SPIx(TXB) = 0xff;
         SPIx(TXB) = 0xff;
         while(!SPIx(RXIF));
         *p++ = SPIx(RXB);
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+        SPIx(TXB) = 0xff;
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
+        uint8_t repeat = (uint8_t)(count / 8);
+        for (uint8_t i = 1; i < repeat; i++) {
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+            SPIx(TXB) = 0xff;
+            while(!SPIx(RXIF));
+            *p++ = SPIx(RXB);
+        }
+        while(!SPIx(RXIF));
+        *p++ = SPIx(RXB);
     }
-    while(!SPIx(RXIF));
-    *p++ = SPIx(RXB);
 }
 
 void SPI(dummy_clocks)(struct SPI *ctx_, unsigned int clocks)
