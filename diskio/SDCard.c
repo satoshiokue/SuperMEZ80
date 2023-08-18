@@ -209,7 +209,8 @@ int SDCard_read512(uint32_t addr, unsigned int offs, void *buf, unsigned int cou
         crc = __SDCard_crc16(crc, buf, count);
     for (unsigned int i = 0; i < 512 - offs - count; i++) {
         response = SPI(receive_byte)(spi);
-        crc = __SDCard_crc16(crc, &response, 1);
+        if (ctx_.calc_read_crc)
+            crc = __SDCard_crc16(crc, &response, 1);
     }
     if ((debug_flags & SDCARD_DEBUG_READ) && (debug_flags & SDCARD_DEBUG_VERBOSE)) {
         util_addrdump("SD: ", (addr * 512) + offs, buf, count);
