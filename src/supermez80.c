@@ -60,7 +60,7 @@ const unsigned char rom[] = {
 void bus_master(int enable);
 void sys_init(void);
 int disk_init(void);
-int disk_select(void);
+int menu_select(void);
 void start_z80(void);
 
 // main routine
@@ -73,15 +73,18 @@ void main(void)
     mem_init();
     mon_init();
 
-#if !defined(CPM_MMU_EXERCISE)
-    if (disk_select() < 0)
-        while (1);
-#endif  // !CPM_MMU_EXERCISE
+    U3RXIE = 1;          // Receiver interrupt enable
+    GIE = 1;             // Global interrupt enable
 
     //
     // Transfer ROM image to the SRAM
     //
     dma_write_to_sram(0x00000, rom, sizeof(rom));
+
+#if !defined(CPM_MMU_EXERCISE)
+    if (menu_select() < 0)
+        while (1);
+#endif  // !CPM_MMU_EXERCISE
 
     //
     // Start Z80
@@ -93,9 +96,6 @@ void main(void)
     }
     printf("\n\r");
     start_z80();
-
-    U3RXIE = 1;          // Receiver interrupt enable
-    GIE = 1;             // Global interrupt enable
 
     while(1) {
         // Wait for IO access
@@ -125,7 +125,7 @@ int disk_init(void)
     return 0;
 }
 
-int disk_select(void)
+int menu_select(void)
 {
     int i;
     unsigned int drive;
@@ -137,8 +137,10 @@ int disk_select(void)
         printf("Failed to open SD Card..\n\r");
         return -3;
     }
+ restart:
     i = 0;
     int selection = -1;
+    f_rewinddir(&fsdir);
     while (f_readdir(&fsdir, &fileinfo) == FR_OK && fileinfo.fname[0] != 0) {
         if (strncmp(fileinfo.fname, "CPMDISKS", 8) == 0 ||
             strncmp(fileinfo.fname, "CPMDIS~", 7) == 0) {
@@ -148,13 +150,19 @@ int disk_select(void)
             i++;
         }
     }
+    printf("M: Monitor prompt\n\r");
     if (1 < i) {
         printf("Select: ");
         while (1) {
-            uint8_t c = (uint8_t)getch();       // Wait for input char
+            uint8_t c = (uint8_t)getch_buffered();  // Wait for input char
             if ('0' <= c && c <= '9' && c - '0' < i) {
                 selection = c - '0';
                 break;
+            }
+            if (c == 'm' || c == 'M') {
+                printf("M\n\r");
+                while (mon_prompt() != MON_CMD_EXIT);
+                goto restart;
             }
             if ((c == 0x0d || c == 0x0a) && 0 <= selection)
                 break;
