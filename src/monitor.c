@@ -419,8 +419,10 @@ static const struct {
     int (*function)(int argc, char *args[]);
     unsigned int flags;
 } mon_cmds[] = {
+    #ifndef NO_MON_BREAKPOINT
     { "breakpoint",     1, mon_cmd_breakpoint        },
     { "clearbreakpoint",0, mon_cmd_clearbreakpoint   },
+    #endif
     { "continue",       0, mon_cmd_continue          },
     { "disassemble",    2, mon_cmd_disassemble       },
     { "di",             2, mon_cmd_disassemble       },
@@ -429,7 +431,9 @@ static const struct {
     { "reset",          0, mon_cmd_reset             },
     { "sdread",         2, mon_cmd_sdread            },
     { "set",            2, mon_cmd_set,              MON_STR_ARG(0) },
+    #ifndef NO_MON_STEP
     { "step",           1, mon_cmd_step              },
+    #endif
     { "status",         0, mon_cmd_status            },
     { "write",          2, mon_cmd_write,            MON_STR_ARG(1) },
     { "help",           0, mon_cmd_help              },
