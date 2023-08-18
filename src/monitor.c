@@ -418,25 +418,45 @@ static const struct {
     uint8_t nargs;
     int (*function)(int argc, char *args[]);
     unsigned int flags;
+    const char *argument;
+    const char *description;
 } mon_cmds[] = {
     #ifndef NO_MON_BREAKPOINT
     { "breakpoint",     1, mon_cmd_breakpoint        },
     { "clearbreakpoint",0, mon_cmd_clearbreakpoint   },
     #endif
-    { "continue",       0, mon_cmd_continue          },
-    { "disassemble",    2, mon_cmd_disassemble       },
+    { "continue",       0, mon_cmd_continue,         0,
+      "",
+      "Exit monitor and continue execution" },
+    { "disassemble",    2, mon_cmd_disassemble,      0,
+      "[addr][,length]",
+      "Translate machine code on the target memory" },
     { "di",             2, mon_cmd_disassemble       },
-    { "diskread",       4, mon_cmd_diskread          },
-    { "dump",           2, mon_cmd_dump              },
-    { "reset",          0, mon_cmd_reset             },
-    { "sdread",         2, mon_cmd_sdread            },
-    { "set",            2, mon_cmd_set,              MON_STR_ARG(0) },
+    { "diskread",       4, mon_cmd_diskread,         0,
+      "[drive][,track][,sector][,length] or [drive,]LBA",
+      "Display sector(s) from disk image file" },
+    { "dump",           2, mon_cmd_dump,             0,
+      "[addr][,length]",
+      "Display data on the target memory" },
+    { "reset",          0, mon_cmd_reset,            0,
+      "Restart the system" },
+    { "sdread",         2, mon_cmd_sdread,           0,
+      "[LBA][,length]",
+      "Display data block(s) from the SD Card" },
+    { "set",            2, mon_cmd_set,              MON_STR_ARG(0),
+      "[variable][=value]",
+      "Display or change specified debug variable" },
     #ifndef NO_MON_STEP
     { "step",           1, mon_cmd_step              },
     #endif
-    { "status",         0, mon_cmd_status            },
-    { "write",          2, mon_cmd_write,            MON_STR_ARG(1) },
-    { "help",           0, mon_cmd_help              },
+    { "status",         0, mon_cmd_status,           0,
+      "",
+      "Display status of the target" },
+    { "write",          2, mon_cmd_write,            MON_STR_ARG(1),
+      "[addr],value",
+      "Write byte or string to the target memory" },
+    { "help",           0, mon_cmd_help,             0,
+      "Display this message" },
 };
 #define MON_INVALID_CMD_INDEX UTIL_ARRAYSIZEOF(mon_cmds)
 
@@ -675,7 +695,12 @@ int mon_parse(char *line, unsigned int *command, char *args[MON_MAX_ARGS])
 int mon_cmd_help(int argc, char *args[])
 {
     for (unsigned int cmd_idx = 0; cmd_idx < sizeof(mon_cmds)/sizeof(*mon_cmds); cmd_idx++) {
-        printf("%s\n\r", mon_cmds[cmd_idx].name);
+        if (!mon_cmds[cmd_idx].description)
+            continue;
+        printf("%s", mon_cmds[cmd_idx].name);
+        if (mon_cmds[cmd_idx].argument)
+            printf(" %s", mon_cmds[cmd_idx].argument);
+        printf("\n\r    %s\n\r", mon_cmds[cmd_idx].description);
     }
     return MON_CMD_OK;
 }
